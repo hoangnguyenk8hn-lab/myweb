@@ -4,6 +4,7 @@ import {
   center,
   elementShapeId,
   LINE_TYPES,
+  pointRadius,
   worldPoint,
 } from "./sceneGeometry";
 import { svgPathAnchors } from "./pathBounds";
@@ -16,6 +17,7 @@ import {
 export type SnapTarget = {
   point: Point;
   kind:
+    | "point"
     | "endpoint"
     | "midpoint"
     | "vertex"
@@ -26,6 +28,7 @@ export type SnapTarget = {
   radius?: number;
 };
 export const SNAP_LABELS: Record<SnapTarget["kind"], string> = {
+  point: "Điểm",
   endpoint: "Đầu mút",
   midpoint: "Trung điểm",
   vertex: "Đỉnh",
@@ -36,6 +39,15 @@ export const SNAP_LABELS: Record<SnapTarget["kind"], string> = {
 const cache = new Map<string, Omit<SnapTarget, "ids">[]>();
 
 export function objectSnapTargets(e: DiagramElement): SnapTarget[] {
+  if (e.type === "point")
+    return [
+      {
+        point: worldPoint({ x: e.x, y: e.y }, e),
+        kind: "point",
+        ids: [e.id],
+        radius: pointRadius(e),
+      },
+    ];
   if (e.type === "freehand") {
     const points = absolutePoints(e).map((p) => worldPoint(p, e));
     if (!points.length) return [];
