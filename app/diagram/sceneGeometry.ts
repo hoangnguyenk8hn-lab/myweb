@@ -1,14 +1,38 @@
-import type { DiagramElement, Point } from "./types";
+import type { DiagramDocument, DiagramElement, Point } from "./types";
 import type { Bounds } from "./pathBounds";
 import {
   lineVertices,
   moveLineEndpoint as baseMoveLineEndpoint,
   resizeElements as baseResizeElements,
+  resolveElement as baseResolveElement,
   worldPoint,
 } from "./sceneGeometryBase";
 import { isAltModifierDown } from "./modifierState";
 
 export * from "./sceneGeometryBase";
+
+const CENTER_SELECTION_SHAPES = new Set([
+  "rectangle",
+  "square",
+  "regular-polygon",
+  "quadratic",
+]);
+
+/**
+ * Mark core boxed geometry as centered in the resolved scene representation.
+ * `boxed` is already the selection-layer signal for showing a center point;
+ * for non-line shapes it does not change their rendered geometry.
+ */
+export function resolveElement(
+  e: DiagramElement,
+  doc: DiagramDocument,
+): DiagramElement {
+  const resolved = baseResolveElement(e, doc);
+  const shape = resolved.shape ?? resolved.type;
+  return CENTER_SELECTION_SHAPES.has(shape)
+    ? { ...resolved, boxed: true }
+    : resolved;
+}
 
 function projectEndpointToOriginalAxis(
   e: DiagramElement,
