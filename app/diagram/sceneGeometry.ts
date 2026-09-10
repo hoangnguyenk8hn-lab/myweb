@@ -1,17 +1,24 @@
 import type { DiagramDocument, DiagramElement, Point } from "./types";
 import type { Bounds } from "./pathBounds";
 import {
+  drawElement as baseDrawElement,
   lineVertices,
   moveLineEndpoint as baseMoveLineEndpoint,
   resizeElements as baseResizeElements,
   resolveElement as baseResolveElement,
   sceneBounds as baseSceneBounds,
   within as baseWithin,
+  worldBounds as baseWorldBounds,
   worldPoint,
 } from "./sceneGeometryBase";
 import { isAltModifierDown } from "./modifierState";
 
 export * from "./sceneGeometryBase";
+
+export const DEFAULT_POINT_SIZE = 0.4;
+export function pointRadius(e: DiagramElement) {
+  return Math.max(0.1, Math.min(2, e.pointSize ?? DEFAULT_POINT_SIZE)) * 4;
+}
 
 const CENTER_SELECTION_SHAPES = new Set([
   "rectangle",
@@ -47,6 +54,30 @@ export function resolveElement(
     : resolved;
 }
 
+/** A Point is one geometric coordinate; its marker size is visual only. */
+export function sceneBounds(e: DiagramElement): Bounds {
+  if (e.type !== "point") return baseSceneBounds(e);
+  const r = pointRadius(e);
+  return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
+}
+
+export function worldBounds(e: DiagramElement): Bounds {
+  if (e.type !== "point") return baseWorldBounds(e);
+  const r = pointRadius(e);
+  return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
+}
+
+export function drawElement(
+  e: DiagramElement,
+  start: Point,
+  end: Point,
+  square = false,
+): DiagramElement {
+  if (e.type === "point")
+    return { ...e, x: start.x, y: start.y, width: 0, height: 0 };
+  return baseDrawElement(e, start, end, square);
+}
+
 /**
  * Round objects must use their actual ellipse footprint for endpoint attachment.
  * Using the rectangular scene bounds makes empty bounding-box corners count as
@@ -54,6 +85,7 @@ export function resolveElement(
  * circle and its endpoint moves again when the opposite endpoint is dragged.
  */
 export function within(p: Point, e: DiagramElement, padding = 0) {
+  if (e.type === "point") return false;
   const shape = e.shape ?? e.type;
   const round =
     ROUND_ATTACHMENT_SHAPES.has(shape) ||
@@ -136,6 +168,7 @@ export function resizeElements(
   to: Bounds,
   local = elements.length === 1,
 ): DiagramElement[] {
+  if (elements.length === 1 && elements[0].type === "point") return elements;
   return baseResizeElements(
     elements,
     from,
