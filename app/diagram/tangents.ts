@@ -92,7 +92,9 @@ function ellipseTangents(
       };
     return {
       contact,
-      end: tangentEnd(source, contact, direction),
+      end: throughSource
+        ? tangentEnd(source, source, direction)
+        : tangentEnd(source, contact, direction),
       throughSource,
     };
   };
@@ -236,7 +238,9 @@ function numericPathTangents(
     const throughSource = distance(source, contact) < 0.6;
     result.push({
       contact,
-      end: tangentEnd(source, contact, direction),
+      end: throughSource
+        ? tangentEnd(source, source, direction)
+        : tangentEnd(source, contact, direction),
       throughSource,
     });
   }
