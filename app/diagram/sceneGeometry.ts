@@ -63,10 +63,14 @@ export function sceneBounds(e: DiagramElement): Bounds {
   return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
 }
 
+/**
+ * World bounds for Point represent its geometric coordinate, not the painted
+ * marker. Move snapping uses the world-bounds origin as its anchor, so keeping
+ * this at (x, y) makes a dragged Point land exactly on grid intersections.
+ */
 export function worldBounds(e: DiagramElement): Bounds {
   if (!isPointElement(e)) return baseWorldBounds(e);
-  const r = pointRadius(e);
-  return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
+  return { x: e.x, y: e.y, width: 0, height: 0 };
 }
 
 export function drawElement(
