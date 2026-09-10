@@ -456,8 +456,8 @@ export function EditorToolbar({
             }
           >
             <p className="intersection-help">
-              Bật Intersection để đánh dấu chỗ cắt nhau. Đưa đầu đường tới dấu
-              để bắt điểm.
+              Bật Intersection để tạo các điểm bắt tại chỗ cắt nhau. Chọn ∅ để
+              ẩn dấu giao điểm nhưng vẫn giữ khả năng bắt điểm.
             </p>
             <label className="menu-check">
               <input
@@ -482,13 +482,17 @@ export function EditorToolbar({
                   key={kind}
                   title={kind}
                   aria-label={`Intersection ${kind}`}
-                  aria-pressed={(e.intersectionKind ?? "circle") === kind}
+                  aria-pressed={
+                    !e.intersectionHidden &&
+                    (e.intersectionKind ?? "circle") === kind
+                  }
                   onClick={() =>
                     onPatch({
                       intersection: true,
                       intersectionWith: undefined,
                       blockIntersection: false,
                       intersectionKind: kind,
+                      intersectionHidden: false,
                       ...intersectionDefaultPatch,
                     })
                   }
@@ -496,23 +500,41 @@ export function EditorToolbar({
                   {kind === "circle" ? "○" : kind === "dot" ? "●" : "×"}
                 </button>
               ))}
+              <button
+                title="Ẩn điểm giao (chỉ bắt điểm)"
+                aria-label="Intersection hidden"
+                aria-pressed={!!e.intersectionHidden}
+                onClick={() =>
+                  onPatch({
+                    intersection: true,
+                    intersectionWith: undefined,
+                    blockIntersection: false,
+                    intersectionHidden: true,
+                    ...intersectionDefaultPatch,
+                  })
+                }
+              >
+                ∅
+              </button>
             </div>
-            <SizeSlider
-              label="Intersection size"
-              value={Math.max(
-                0.1,
-                Math.min(
-                  2,
-                  e.intersectionMarkerSize ??
-                    (e.intersectionSize === undefined
-                      ? DEFAULT_INTERSECTION_MARKER_SIZE
-                      : e.intersectionSize / 4),
-                ),
-              )}
-              onChange={(intersectionMarkerSize) =>
-                onPatch({ intersectionMarkerSize })
-              }
-            />
+            {!e.intersectionHidden && (
+              <SizeSlider
+                label="Intersection size"
+                value={Math.max(
+                  0.1,
+                  Math.min(
+                    2,
+                    e.intersectionMarkerSize ??
+                      (e.intersectionSize === undefined
+                        ? DEFAULT_INTERSECTION_MARKER_SIZE
+                        : e.intersectionSize / 4),
+                  ),
+                )}
+                onChange={(intersectionMarkerSize) =>
+                  onPatch({ intersectionMarkerSize })
+                }
+              />
+            )}
           </Dropdown>
           <button
             title="Block Intersection: hide this object's intersection marks"
