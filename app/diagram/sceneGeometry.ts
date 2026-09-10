@@ -5,6 +5,8 @@ import {
   moveLineEndpoint as baseMoveLineEndpoint,
   resizeElements as baseResizeElements,
   resolveElement as baseResolveElement,
+  sceneBounds as baseSceneBounds,
+  within as baseWithin,
   worldPoint,
 } from "./sceneGeometryBase";
 import { isAltModifierDown } from "./modifierState";
@@ -17,6 +19,7 @@ const CENTER_SELECTION_SHAPES = new Set([
   "regular-polygon",
   "quadratic",
 ]);
+const ROUND_ATTACHMENT_SHAPES = new Set(["circle", "ellipse"]);
 
 /**
  * Mark core boxed geometry as centered in the resolved scene representation.
@@ -32,6 +35,32 @@ export function resolveElement(
   return CENTER_SELECTION_SHAPES.has(shape)
     ? { ...resolved, boxed: true }
     : resolved;
+}
+
+/**
+ * Round objects must use their actual ellipse footprint for endpoint attachment.
+ * Using the rectangular scene bounds makes empty bounding-box corners count as
+ * part of a circle, so a line dropped on a guide corner becomes attached to the
+ * circle and its endpoint moves again when the opposite endpoint is dragged.
+ */
+export function within(p: Point, e: DiagramElement, padding = 0) {
+  const shape = e.shape ?? e.type;
+  const round =
+    ROUND_ATTACHMENT_SHAPES.has(shape) ||
+    ROUND_ATTACHMENT_SHAPES.has(e.textBorder ?? "");
+  if (!round) return baseWithin(p, e, padding);
+
+  const b = baseSceneBounds(e);
+  const rx = b.width / 2,
+    ry = b.height / 2;
+  if (rx < 1e-8 || ry < 1e-8) return false;
+  const cx = b.x + rx,
+    cy = b.y + ry,
+    paddedRx = Math.max(1e-8, rx + padding),
+    paddedRy = Math.max(1e-8, ry + padding),
+    dx = (p.x - cx) / paddedRx,
+    dy = (p.y - cy) / paddedRy;
+  return dx * dx + dy * dy <= 1;
 }
 
 function projectEndpointToOriginalAxis(
