@@ -46,6 +46,7 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
+import { isAltModifierDown } from "./modifierState";
 import type {
   DiagramDocument,
   DiagramElement,
@@ -184,8 +185,9 @@ export function CurrentCanvas(p: Props) {
     y: Math.max(0, Math.min(d.height, q.y)),
   });
   const snap = (q: Point, excluded: string[] = selectedIds): Point => {
-    let x = d.grid.snap ? Math.round(q.x / d.grid.size) * d.grid.size : q.x,
-      y = d.grid.snap ? Math.round(q.y / d.grid.size) * d.grid.size : q.y;
+    const gridSnap = d.grid.snap && !isAltModifierDown();
+    let x = gridSnap ? Math.round(q.x / d.grid.size) * d.grid.size : q.x,
+      y = gridSnap ? Math.round(q.y / d.grid.size) * d.grid.size : q.y;
     const lines: { x?: number; y?: number } = {};
     if (d.grid.snapShapes) {
       let dx = 6 / zoom,
