@@ -12,6 +12,7 @@ import {
   intersectionAppearance,
   type IntersectionMark,
 } from "./intersections";
+import { isAltModifierDown } from "./modifierState";
 
 export type SnapTarget = {
   point: Point;
@@ -113,6 +114,12 @@ export function nearestSnapTarget(
   zoom = 1,
   ownIntersectionId?: string,
 ): SnapTarget | null {
+  // Option on macOS and Alt on Windows/Linux intentionally suppress all
+  // object-point snapping while the modifier is held. This lets centered
+  // resize/line-extension gestures move continuously without jumping to
+  // endpoints, midpoints, vertices, centers, quadrants or intersections.
+  if (isAltModifierDown()) return null;
+
   let closest: SnapTarget | null = null,
     best = Infinity;
   for (const target of targets) {
@@ -149,6 +156,8 @@ export function translationSnap(
   excluded: string[],
   zoom = 1,
 ) {
+  if (isAltModifierDown()) return null;
+
   let closest: { target: SnapTarget; shift: Point } | null = null,
     best = Infinity;
   for (const source of sources) {
