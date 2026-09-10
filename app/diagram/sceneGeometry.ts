@@ -81,6 +81,17 @@ export function drawElement(
 ): DiagramElement {
   if (isPointElement(e))
     return { ...e, x: start.x, y: start.y, width: 0, height: 0 };
+
+  if ((e.shape ?? e.type) === "circle") {
+    const radius = Math.max(0.01, Math.hypot(end.x - start.x, end.y - start.y));
+    return baseDrawElement(
+      e,
+      { x: start.x - radius, y: start.y - radius },
+      { x: start.x + radius, y: start.y + radius },
+      true,
+    );
+  }
+
   return baseDrawElement(e, start, end, square);
 }
 
