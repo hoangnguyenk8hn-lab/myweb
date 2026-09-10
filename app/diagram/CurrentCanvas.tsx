@@ -52,7 +52,6 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
-import { isAltModifierDown } from "./modifierState";
 import type {
   DiagramDocument,
   DiagramElement,
@@ -70,7 +69,13 @@ type Gesture =
       points: Point[];
       original: DiagramElement;
     }
-  | { kind: "move"; start: Point; originals: DiagramElement[] }
+  | {
+      kind: "move";
+      start: Point;
+      originals: DiagramElement[];
+      copySource?: DiagramElement[];
+      copied?: boolean;
+    }
   | {
       kind: "resize";
       start: Point;
@@ -232,7 +237,7 @@ export function CurrentCanvas(p: Props) {
     y: Math.max(0, Math.min(d.height, q.y)),
   });
   const snap = (q: Point, excluded: string[] = selectedIds): Point => {
-    const gridSnap = d.grid.snap && !isAltModifierDown();
+    const gridSnap = d.grid.snap;
     let x = gridSnap ? Math.round(q.x / d.grid.size) * d.grid.size : q.x,
       y = gridSnap ? Math.round(q.y / d.grid.size) * d.grid.size : q.y;
     const lines: { x?: number; y?: number } = {};
@@ -522,21 +527,6 @@ export function CurrentCanvas(p: Props) {
     const group = e.groupId
       ? elements.filter((n) => n.groupId === e.groupId).map((n) => n.id)
       : [e.id];
-    if (event.altKey && !selectedIds.includes(e.id) && !e.locked) {
-      const copies = optionDragCopies(elements.filter((n) => group.includes(n.id)));
-      p.onSelect(copies.map((n) => n.id));
-      setContext(null);
-      begin(event, {
-        kind: "move",
-        start: pos(event),
-        originals: copies,
-      });
-      p.onReplace((doc) => ({
-        ...doc,
-        elements: [...doc.elements, ...copies],
-      }));
-      return;
-    }
     let ids = selectedIds;
     if (event.shiftKey) {
       ids = selectedIds.includes(e.id)
@@ -551,11 +541,14 @@ export function CurrentCanvas(p: Props) {
       event.stopPropagation();
       return;
     }
+    const originals = elements.filter((n) => ids.includes(n.id) && !n.locked);
     setContext(null);
     begin(event, {
       kind: "move",
       start: pos(event),
-      originals: elements.filter((n) => ids.includes(n.id) && !n.locked),
+      originals,
+      copySource: event.altKey ? originals : undefined,
+      copied: false,
     });
   };
   const move = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -611,24 +604,35 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     if (g.kind === "move") {
+      let insertCopies = false;
+      if (g.copySource && !g.copied) {
+        if (Math.hypot(q.x - g.start.x, q.y - g.start.y) <= 1 / zoom) return;
+        const copies = optionDragCopies(g.copySource);
+        g.originals = copies;
+        g.copied = true;
+        insertCopies = true;
+        p.onSelect(copies.map((e) => e.id));
+      }
       if (!g.originals.length) return;
       const base = worldBounds(g.originals[0]),
         dx = q.x - g.start.x,
-        dy = q.y - g.start.y;
-      const next = event.altKey
-        ? { x: base.x + dx, y: base.y + dy }
-        : snap(
-            { x: base.x + dx, y: base.y + dy },
-            g.originals.map((e) => e.id),
-          );
+        dy = q.y - g.start.y,
+        excludedIds = [
+          ...g.originals.map((e) => e.id),
+          ...(g.copied ? (g.copySource ?? []).map((e) => e.id) : []),
+        ];
+      const next = snap(
+        { x: base.x + dx, y: base.y + dy },
+        excludedIds,
+      );
       let shift = { x: next.x - base.x, y: next.y - base.y };
       const aligned =
-        !event.altKey && !event.shiftKey
+        !event.shiftKey
           ? translationSnap(
               g.originals.flatMap(objectSnapTargets),
               { x: dx, y: dy },
               snapTargets,
-              g.originals.map((e) => e.id),
+              excludedIds,
               zoom,
             )
           : null;
@@ -637,10 +641,9 @@ export function CurrentCanvas(p: Props) {
         snappedTarget.current = aligned.target;
         setSnapPoint(aligned.target);
         setSnapLines({ x: aligned.target.point.x, y: aligned.target.point.y });
-      } else if (event.altKey || event.shiftKey) {
+      } else if (event.shiftKey) {
         snappedTarget.current = null;
         setSnapPoint(null);
-        if (event.altKey) setSnapLines({});
       }
       if (event.shiftKey)
         shift =
@@ -652,9 +655,14 @@ export function CurrentCanvas(p: Props) {
       );
       p.onReplace((doc) => ({
         ...doc,
-        elements: doc.elements.map((e) =>
-          updates.has(e.id) ? { ...e, ...updates.get(e.id) } : e,
-        ),
+        elements: insertCopies
+          ? [
+              ...doc.elements,
+              ...g.originals.map((e) => ({ ...e, ...updates.get(e.id) })),
+            ]
+          : doc.elements.map((e) =>
+              updates.has(e.id) ? { ...e, ...updates.get(e.id) } : e,
+            ),
       }));
       return;
     }
@@ -685,11 +693,9 @@ export function CurrentCanvas(p: Props) {
           current.y -
           start.y,
       };
-      const end = event.altKey
-        ? local
-        : g.local
-          ? localPoint(snap(worldPoint(local, g.originals[0])), g.originals[0])
-          : snap(local);
+      const end = g.local
+        ? localPoint(snap(worldPoint(local, g.originals[0])), g.originals[0])
+        : snap(local);
       let x = g.box.x,
         y = g.box.y,
         w = g.box.width,
@@ -1227,7 +1233,7 @@ export function CurrentCanvas(p: Props) {
                                     strokeWidth="1"
                                   />
                                   <path
-                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L2.5 -2.5"
+                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L-2.5 -2.5"
                                     stroke="white"
                                     strokeWidth="1.2"
                                   />
