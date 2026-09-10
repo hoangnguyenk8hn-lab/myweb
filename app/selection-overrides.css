@@ -9,15 +9,15 @@
 .selection-layer [data-selection-center] circle {
   fill: #4f9f65 !important;
   stroke: none !important;
-  opacity: 0.3;
+  opacity: 0.5;
 }
 
-/* Selection bounding boxes, resize handles and rotate chrome at ~30% opacity. */
+/* Selection bounding boxes, resize handles and rotate chrome at ~50% opacity. */
 .selection-layer rect[stroke="#70b37f"],
 .selection-layer circle[stroke="#70b37f"],
 .selection-layer rect[stroke="#8bc298"],
 .selection-layer rect[fill="#69ae77"],
 .selection-layer path[stroke="#87ab8e"],
 .selection-layer circle[fill="#e9b265"] {
-  opacity: 0.3;
+  opacity: 0.5;
 }
