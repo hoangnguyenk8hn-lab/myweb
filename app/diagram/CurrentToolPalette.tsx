@@ -99,6 +99,13 @@ export function CurrentToolPalette({
       {header("general", "General")}
       {open.general && (
         <div className="general-tools">
+          {basic(
+            "point",
+            "Point",
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <circle cx="14" cy="14" r="3" fill="currentColor" />
+            </svg>,
+          )}
           {basic("text", "Math", "ƒx")}
           {basic(
             "plain-text",
