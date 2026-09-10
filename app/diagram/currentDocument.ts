@@ -28,7 +28,12 @@ export function makeElement(
   width = 100,
   height = 70,
 ): DiagramElement {
-  const shape = tool.startsWith("shape:") ? tool.slice(6) : undefined;
+  const shape =
+    tool === "point"
+      ? "point"
+      : tool.startsWith("shape:")
+        ? tool.slice(6)
+        : undefined;
   const type = shape
     ? "shape"
     : tool === "select" || tool === "hand"
@@ -36,9 +41,9 @@ export function makeElement(
       : (tool as DiagramElement["type"]);
   const text = ["text", "plain-text", "boxed-text"].includes(type);
   const line = ["line", "arrow", "curve", "curved-arrow"].includes(type);
-  const point = type === "point";
+  const point = shape === "point";
   return {
-    id: createId(type),
+    id: createId(point ? "point" : type),
     type,
     shape,
     x,
@@ -73,7 +78,9 @@ export function makeElement(
     ...(type === "plot"
       ? { plot: structuredClone(DEFAULT_PLOT), width: 320, height: 230 }
       : {}),
-    ...(shape && !SHAPE_MAP[shape] ? { shape: "rectangle" } : {}),
+    ...(shape && shape !== "point" && !SHAPE_MAP[shape]
+      ? { shape: "rectangle" }
+      : {}),
     ...(shape === "regular-polygon"
       ? { parameters: { sides: 5 }, height: width }
       : {}),
