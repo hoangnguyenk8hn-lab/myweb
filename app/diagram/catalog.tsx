@@ -20,6 +20,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     tools: [
       { id: "line", label: "Straight line", shortcut: "L" },
       { id: "curve", label: "Curved line" },
+      { id: "tangent", label: "Tangent from point" },
       { id: "arrow", label: "Straight arrow", shortcut: "A" },
       { id: "curved-arrow", label: "Curved arrow" },
     ],
@@ -97,6 +98,13 @@ export function ToolIcon({
         </text>
       )}
       {tool === "line" && <path d="M4 15h20" {...shared} />}
+      {tool === "tangent" && (
+        <>
+          <circle cx="19" cy="14" r="7" {...shared} />
+          <circle cx="5" cy="22" r="1.6" fill="currentColor" stroke="none" />
+          <path d="M5 22L14.5 8.6" {...shared} />
+        </>
+      )}
       {tool === "arrow" && <path d="M3 15h20m-5-5 5 5-5 5" {...shared} />}
       {tool === "curve" && <path d="M3 19Q14 4 25 16" {...shared} />}
       {tool === "curved-arrow" && (
