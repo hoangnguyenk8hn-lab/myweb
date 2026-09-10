@@ -21,3 +21,10 @@
 .selection-layer circle[fill="#e9b265"] {
   opacity: 0.5;
 }
+
+/* Line/Curve endpoint selection handles at 50% opacity.
+ * The add-vertex handle exists only for editable Line and Curve selections,
+ * so Arrow/Curved Arrow endpoint chrome is left unchanged. */
+.selection-layer g:has(> .vertex-add-handle) > g > rect.control-handle[rx="0"] {
+  opacity: 0.5;
+}
