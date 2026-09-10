@@ -1,6 +1,6 @@
-# Diagram Draw — giao diện Drawing hiện tại của Mathcha
+# Diagram Draw — giao diện Drawing 
 
-Ứng dụng vẽ độc lập bằng React + TypeScript + SVG. Bản này thay thế giao diện cổ điển của lần dựng trước bằng cửa sổ Drawing mở rộng đã đối chiếu trực tiếp với Mathcha ngày 09/09/2026: bảng nhóm hình bên trái, thanh thuộc tính ở trên, canvas trắng ở giữa, zoom/Guides phía dưới và hai nút Close/Saved.
+Ứng dụng vẽ độc lập bằng React + TypeScript + SVG. 
 
 Mã nguồn được viết lại và có thể chỉnh sửa. Ứng dụng không cần đăng nhập Mathcha và không tải bundle Mathcha để chạy.
 
@@ -94,11 +94,4 @@ Saved nghĩa là sơ đồ đã lưu trong trình duyệt đang dùng. Dữ li�
 | Hiển thị từng đối tượng              | app/diagram/SceneElement.tsx                        |
 | Xuất ảnh / JSON / TikZ               | app/diagram/currentExporters.ts                     |
 
-## Nguồn đối chiếu và thư viện
 
-- Drawing: https://www.mathcha.io/documentation/drawing-area/
-- Advanced Drawing: https://www.mathcha.io/documentation/advanced-drawing-area/
-- Arrow: https://www.mathcha.io/documentation/arrow/
-- Plotting: https://www.mathcha.io/documentation/plotting/
-- MathLive 0.110.0: MIT; giấy phép font/gói được giữ cùng tài nguyên.
-- MathJax 3.2.2: Apache-2.0.
