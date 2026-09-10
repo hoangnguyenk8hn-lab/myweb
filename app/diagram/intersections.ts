@@ -4,6 +4,7 @@ import {
   center,
   elementMatrix,
   elementShapeId,
+  isPointElement,
   isCurve,
   curvePoint,
   linePath,
@@ -140,7 +141,7 @@ export function elementSegments(e: DiagramElement): Segment[] {
 export function elementTouchesRect(e: DiagramElement, rect: Bounds): boolean {
   const box = worldBounds(e);
   if (!overlaps(box, rect)) return false;
-  if (e.type === "point") return true;
+  if (isPointElement(e)) return true;
 
   // These are area objects: a partial overlap with their visible frame counts.
   if (TEXT_TYPES.has(e.type) || e.type === "image" || e.type === "plot")
@@ -351,7 +352,7 @@ export function collectIntersections(
 ): IntersectionMark[] {
   if (!elements.some((e) => e.intersection && !e.blockIntersection)) return [];
   const entries = elements
-    .filter((e) => e.type !== "point" && !e.blockIntersection && e.style.opacity > 0)
+    .filter((e) => !isPointElement(e) && !e.blockIntersection && e.style.opacity > 0)
     .map((e, index) => ({ e, index, b: worldBounds(e) }))
     .sort((a, b) => a.b.x - b.b.x);
   const marks: IntersectionMark[] = [];
