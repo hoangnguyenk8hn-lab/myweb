@@ -3,6 +3,7 @@ export function IntersectionLayer({ marks }: { marks: IntersectionMark[] }) {
   return (
     <g data-intersections pointerEvents="none">
       {marks.map(({ point: p, owner: e, ids }, i) => {
+        if (e.intersectionKind === "hidden") return null;
         const { radius: r, strokeWidth } = intersectionAppearance(e),
           color = e.style.stroke === "transparent" ? "#000000" : e.style.stroke;
         return (
