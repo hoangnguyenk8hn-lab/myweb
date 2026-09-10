@@ -24,6 +24,7 @@ import {
   type SnapTarget,
 } from "./snapping";
 import { makeElement } from "./currentDocument";
+import { createId } from "./defaultDocument";
 import {
   absolutePoints,
   addLineVertex,
@@ -143,6 +144,25 @@ function pointsBox(points: Point[]) {
       y: (p.y - y) / height,
     })),
   };
+}
+function optionDragCopies(source: DiagramElement[]) {
+  const idMap = new Map(source.map((e) => [e.id, createId(e.type)])),
+    groups = new Map(
+      source
+        .filter((e) => e.groupId)
+        .map((e) => [e.groupId!, createId("group")]),
+    );
+  return source.map((e) => ({
+    ...structuredClone(e),
+    id: idMap.get(e.id)!,
+    locked: false,
+    groupId: e.groupId ? groups.get(e.groupId) : undefined,
+    fromId: e.fromId ? idMap.get(e.fromId) : undefined,
+    toId: e.toId ? idMap.get(e.toId) : undefined,
+    intersectionWith: e.intersectionWith?.flatMap((id) =>
+      idMap.has(id) ? [idMap.get(id)!] : [],
+    ),
+  }));
 }
 export function CurrentCanvas(p: Props) {
   const { document: d, tool, selectedIds, zoom } = p;
@@ -502,6 +522,21 @@ export function CurrentCanvas(p: Props) {
     const group = e.groupId
       ? elements.filter((n) => n.groupId === e.groupId).map((n) => n.id)
       : [e.id];
+    if (event.altKey && !selectedIds.includes(e.id) && !e.locked) {
+      const copies = optionDragCopies(elements.filter((n) => group.includes(n.id)));
+      p.onSelect(copies.map((n) => n.id));
+      setContext(null);
+      begin(event, {
+        kind: "move",
+        start: pos(event),
+        originals: copies,
+      });
+      p.onReplace((doc) => ({
+        ...doc,
+        elements: [...doc.elements, ...copies],
+      }));
+      return;
+    }
     let ids = selectedIds;
     if (event.shiftKey) {
       ids = selectedIds.includes(e.id)
@@ -1192,7 +1227,7 @@ export function CurrentCanvas(p: Props) {
                                     strokeWidth="1"
                                   />
                                   <path
-                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L2.5 -2.5"
+                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L-2.5 -2.5"
                                     stroke="white"
                                     strokeWidth="1.2"
                                   />
