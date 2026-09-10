@@ -1233,7 +1233,7 @@ export function CurrentCanvas(p: Props) {
                                     strokeWidth="1"
                                   />
                                   <path
-                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L-2.5 -2.5"
+                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L2.5 -2.5"
                                     stroke="white"
                                     strokeWidth="1.2"
                                   />
