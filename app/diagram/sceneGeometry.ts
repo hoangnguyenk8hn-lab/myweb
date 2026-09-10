@@ -20,17 +20,27 @@ const CENTER_SELECTION_SHAPES = new Set([
   "quadratic",
 ]);
 const ROUND_ATTACHMENT_SHAPES = new Set(["circle", "ellipse"]);
+const STATIC_GEOMETRY_LINES = new Set(["line", "curve"]);
 
 /**
  * Mark core boxed geometry as centered in the resolved scene representation.
  * `boxed` is already the selection-layer signal for showing a center point;
  * for non-line shapes it does not change their rendered geometry.
+ *
+ * Plain Line/Curve objects are geometric primitives, not live connectors.
+ * Old endpoint drops could persist fromId/toId on them and baseResolveElement
+ * would then move the supposedly fixed endpoint whenever the other end moved.
+ * Ignore those attachment ids for Line/Curve; Arrow/Curved Arrow keep the
+ * existing live-connector behavior.
  */
 export function resolveElement(
   e: DiagramElement,
   doc: DiagramDocument,
 ): DiagramElement {
-  const resolved = baseResolveElement(e, doc);
+  const source = STATIC_GEOMETRY_LINES.has(e.type)
+    ? { ...e, fromId: undefined, toId: undefined }
+    : e;
+  const resolved = baseResolveElement(source, doc);
   const shape = resolved.shape ?? resolved.type;
   return CENTER_SELECTION_SHAPES.has(shape)
     ? { ...resolved, boxed: true }
