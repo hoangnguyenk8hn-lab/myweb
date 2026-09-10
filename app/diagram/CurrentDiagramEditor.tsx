@@ -46,6 +46,23 @@ function typing(target: EventTarget | null) {
     !!target.closest("input,textarea,select,math-field,[contenteditable=true]")
   );
 }
+function fittedZoom(
+  availableWidth: number,
+  availableHeight: number,
+  drawingWidth: number,
+  drawingHeight: number,
+) {
+  const width = Math.max(1, availableWidth - 2),
+    height = Math.max(1, availableHeight - 2);
+  return Math.max(
+    0.2,
+    Math.min(
+      4,
+      width / Math.max(1, drawingWidth),
+      height / Math.max(1, drawingHeight),
+    ),
+  );
+}
 function ZoomIcon({ minus = false }: { minus?: boolean }) {
   return (
     <svg width="23" height="23" viewBox="0 0 24 24">
@@ -88,10 +105,13 @@ export function CurrentDiagramEditor() {
     ),
     [sizeDraft, setSizeDraft] = useState({ width: 700, height: 400 });
   const svgRef = useRef<SVGSVGElement>(null),
+    drawingMainRef = useRef<HTMLDivElement>(null),
+    drawingSizeRef = useRef({ width: d.width, height: d.height }),
     fileInput = useRef<HTMLInputElement>(null),
     imageInput = useRef<HTMLInputElement>(null),
     clipboard = useRef<DiagramElement[]>([]),
     messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  drawingSizeRef.current = { width: d.width, height: d.height };
   const selected = d.elements
     .filter((e) => selectedIds.includes(e.id))
     .map((e) => resolveElement(e, d));
@@ -127,12 +147,49 @@ export function CurrentDiagramEditor() {
       setSaveState("Save failed");
     }
   }, [d, hydrated, history.inGesture]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const main = drawingMainRef.current;
+    if (!main) return;
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const viewport = main.querySelector<HTMLElement>(".canvas-viewport");
+        if (!viewport) return;
+        const size = drawingSizeRef.current;
+        setZoom(
+          fittedZoom(
+            viewport.clientWidth,
+            viewport.clientHeight,
+            size.width,
+            size.height,
+          ),
+        );
+      });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(main);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [hydrated]);
   useEffect(
     () => () => {
       if (messageTimer.current) clearTimeout(messageTimer.current);
     },
     [],
   );
+  const fitDrawing = () => {
+    const viewport =
+      drawingMainRef.current?.querySelector<HTMLElement>(".canvas-viewport");
+    if (!viewport) return;
+    setZoom(
+      fittedZoom(viewport.clientWidth, viewport.clientHeight, d.width, d.height),
+    );
+  };
   const select = (ids: string[]) => setSelectedIds(ids);
   const canvasTool = (next: DiagramTool) => {
     if (next !== "select" || tool === "select") setTool(next);
@@ -576,7 +633,7 @@ export function CurrentDiagramEditor() {
               onImage={() => imageInput.current?.click()}
               onPlot={newPlot}
             />
-            <div className="drawing-main">
+            <div className="drawing-main" ref={drawingMainRef}>
               <EditorToolbar
                 document={d}
                 selected={selected}
@@ -669,15 +726,7 @@ export function CurrentDiagramEditor() {
                   <button
                     className="menu-row"
                     data-close-menu
-                    onClick={() =>
-                      setZoom(
-                        Math.min(
-                          1,
-                          (window.innerWidth - 410) / d.width,
-                          (window.innerHeight - 220) / d.height,
-                        ),
-                      )
-                    }
+                    onClick={fitDrawing}
                   >
                     Fit Drawing
                   </button>
