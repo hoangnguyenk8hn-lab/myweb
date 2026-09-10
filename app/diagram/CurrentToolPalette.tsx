@@ -99,6 +99,7 @@ export function CurrentToolPalette({
       {header("general", "General")}
       {open.general && (
         <div className="general-tools">
+          {basic("select", "Select")}
           {basic(
             "point",
             "Point",
