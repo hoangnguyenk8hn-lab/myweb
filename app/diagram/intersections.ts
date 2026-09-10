@@ -34,6 +34,10 @@ const cache = new Map<string, Segment[]>();
 /** Nominal symbol size used by newly enabled Intersection marks. */
 export const DEFAULT_INTERSECTION_MARKER_SIZE = 0.4;
 export function intersectionAppearance(e: DiagramElement) {
+  // Hidden intersections remain in the snap-target list. Zero visual geometry
+  // also keeps image/TikZ export invisible while nearest snapping still uses
+  // its independent minimum hit tolerance.
+  if (e.intersectionHidden) return { radius: 0, strokeWidth: 0 };
   const size = e.intersectionMarkerSize;
   // Keep documents from before `intersectionMarkerSize` visually unchanged.
   if (size === undefined && e.intersectionSize !== undefined)
