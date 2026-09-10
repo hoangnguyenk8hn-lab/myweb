@@ -108,7 +108,7 @@ export function SceneElement({
   );
   const middle = linePoint(e, (e.breakPosition ?? 50) / 100);
   let content: React.ReactNode;
-  if (e.type === "point") {
+  if (e.type === "point" || e.shape === "point") {
     const r = pointRadius(e);
     content = (
       <>
