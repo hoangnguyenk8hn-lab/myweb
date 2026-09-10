@@ -4,6 +4,7 @@ export type DiagramTool =
   | `shape:${string}`
   | "select"
   | "hand"
+  | "point"
   | "plain-text"
   | "boxed-text"
   | "polyline"
@@ -113,6 +114,8 @@ export interface DiagramElement {
   startMarkerSize?: number;
   endMarkerSize?: number;
   midMarkerSize?: number;
+  /** Nominal point marker size in px (0.1–2). */
+  pointSize?: number;
   boxed?: boolean;
   intersection?: boolean;
   /** Omitted: intersect every object. Present: only these linked objects. */
