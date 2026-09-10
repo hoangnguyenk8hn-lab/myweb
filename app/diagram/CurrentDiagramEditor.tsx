@@ -134,6 +134,9 @@ export function CurrentDiagramEditor() {
     [],
   );
   const select = (ids: string[]) => setSelectedIds(ids);
+  const canvasTool = (next: DiagramTool) => {
+    if (next !== "select" || tool === "select") setTool(next);
+  };
   const toolbarGesture = useRef(false);
   const toolbarUpdate = (next: Parameters<typeof history.commit>[0]) =>
     toolbarGesture.current ? history.replace(next) : history.commit(next);
@@ -473,6 +476,10 @@ export function CurrentDiagramEditor() {
         history.cancelGesture();
         setTool("select");
         setSelectedIds([]);
+      } else if (event.key === "Enter" && tool !== "select") {
+        event.preventDefault();
+        setTool("select");
+        setSelectedIds([]);
       } else if (event.key.startsWith("Arrow") && selected.length) {
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1,
@@ -600,7 +607,7 @@ export function CurrentDiagramEditor() {
                 tool={tool}
                 selectedIds={selectedIds}
                 onSelect={select}
-                onTool={setTool}
+                onTool={canvasTool}
                 onReplace={history.replace}
                 onBegin={history.beginGesture}
                 onEnd={history.endGesture}
@@ -681,8 +688,8 @@ export function CurrentDiagramEditor() {
                 <span className="drawing-hint">
                   {tool !== "select" && tool !== "hand"
                     ? tool === "polyline" || tool === "polycurve"
-                      ? "Click points · Enter / double-click to finish"
-                      : "Click and drag to draw · Esc to select"
+                      ? "Click points · double-click to finish · Enter / Esc to select"
+                      : "Click and drag to draw · Enter / Esc to select"
                     : ""}
                 </span>
                 {selected.length === 1 && (
@@ -969,7 +976,7 @@ export function CurrentDiagramEditor() {
             </div>
             <div className="shortcut-grid">
               {[
-                ["V / Esc", "Select"],
+                ["V / Enter / Esc", "Select"],
                 ["H / Space + drag", "Pan"],
                 ["T", "Math text"],
                 ["L / A", "Line / Arrow"],
@@ -978,7 +985,7 @@ export function CurrentDiagramEditor() {
                 ["Double-click", "Edit text / plot"],
                 ["Shift + click", "Add to selection"],
                 ["Shift + drag", "Keep ratio / 45° line"],
-                ["Alt + drag", "Ignore snapping"],
+                ["Alt + drag", "Copy selection"],
                 ["Ctrl Z / Shift Z", "Undo / Redo"],
                 ["Ctrl C / X / V", "Copy / Cut / Paste"],
                 ["Ctrl D", "Duplicate"],
@@ -987,10 +994,10 @@ export function CurrentDiagramEditor() {
                 ["Ctrl S / O", "Save / Open JSON"],
                 ["Arrow / Shift Arrow", "Move 1 / 10 px"],
                 ["Delete", "Remove selection"],
-                ["Enter / double-click", "Finish polygon"],
+                ["Double-click", "Finish polygon and keep drawing tool"],
                 ["Ctrl Enter", "Finish text editing"],
               ].map(([key, description]) => (
-                <div key={key}>
+                <div key={`${key}-${description}`}>
                   <kbd>{key}</kbd>
                   <span>{description}</span>
                 </div>
