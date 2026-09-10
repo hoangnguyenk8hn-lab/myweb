@@ -10,7 +10,11 @@ import {
 import { MathInput } from "./MathInput";
 import { SceneElement } from "./SceneElement";
 import { IntersectionLayer } from "./IntersectionLayer";
-import { collectIntersections, dropLineEndpoint } from "./intersections";
+import {
+  collectIntersections,
+  dropLineEndpoint,
+  elementTouchesRect,
+} from "./intersections";
 import {
   collectSnapTargets,
   nearestSnapTarget,
@@ -736,19 +740,12 @@ export function CurrentCanvas(p: Props) {
     const q = constrain(pos(event));
     if (g.kind === "marquee") {
       const b = normalizeBox(g.start, q);
+      const dragged = b.width > 1 / zoom || b.height > 1 / zoom;
       p.onSelect([
         ...new Set([
           ...g.add,
           ...elements
-            .filter((e) => {
-              const eb = worldBounds(e);
-              return (
-                eb.x >= b.x &&
-                eb.y >= b.y &&
-                eb.x + eb.width <= b.x + b.width &&
-                eb.y + eb.height <= b.y + b.height
-              );
-            })
+            .filter((e) => dragged && elementTouchesRect(e, b))
             .flatMap((e) =>
               e.groupId
                 ? elements

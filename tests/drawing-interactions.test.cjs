@@ -39,6 +39,7 @@ const {
   intersectionAppearance,
   nearestIntersection,
   dropLineEndpoint,
+  elementTouchesRect,
   segmentIntersection,
 } = require("../app/diagram/intersections.ts");
 const { historyReducer } = require("../app/diagram/currentHistory.ts");
@@ -486,6 +487,24 @@ test("Intersection snap targets respect zoom, exclusions, blocking and symbol si
   );
   const large = collectIntersections([{ ...a, intersectionMarkerSize: 2 }, b]);
   assert.equal(nearestIntersection({ x: 59, y: 50 }, large), large[0]);
+});
+
+test("marquee selection captures touched strokes but not a hollow shape's empty center", () => {
+  const line = makeElement("line", 0, 50, 100, 0);
+  assert.equal(
+    elementTouchesRect(line, { x: 45, y: 45, width: 10, height: 10 }),
+    true,
+  );
+
+  const circle = makeElement("shape:circle", 0, 0, 100, 100);
+  assert.equal(
+    elementTouchesRect(circle, { x: 45, y: 45, width: 10, height: 10 }),
+    false,
+  );
+  assert.equal(
+    elementTouchesRect(circle, { x: 86, y: 44, width: 8, height: 12 }),
+    true,
+  );
 });
 
 test("releasing an endpoint on an Intersection keeps the exact point instead of binding the nearby shape", () => {

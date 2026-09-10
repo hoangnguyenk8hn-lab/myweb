@@ -276,6 +276,8 @@ Menu **Intersection** trên toolbar bật trường `intersection` của đối 
 
 `CurrentCanvas.tsx` giữ danh sách mục tiêu tại thời điểm bắt đầu kéo đầu mút, để đầu mút có thể bắt lại chỗ giao của chính đường đó mà mục tiêu không chạy theo con trỏ. `dropLineEndpoint()` ưu tiên tọa độ đã bắt khi thả chuột, tránh cơ chế tự nối vào khung hình làm lệch điểm. `movePolygonPoint()` bù vị trí tâm xoay sau khi thay đổi khung đa giác để giữ các đỉnh còn lại. `blockIntersection` chỉ chặn dấu và mục tiêu giao điểm; đầu mút và đỉnh vẫn có thể bắt được.
 
+Chọn vùng gọi `elementTouchesRect()` để kiểm tra vùng quét có thực sự chạm nét của đối tượng, thay vì buộc toàn bộ `worldBounds()` phải nằm trong vùng. Nhờ đó, vùng nằm hoàn toàn trong khoảng rỗng của Circle/Ellipse không chọn nhầm hình. `SceneElement.tsx` đặt Shape/Polyline ở chế độ hit-test theo `stroke`; lớp hit vô hình rộng hơn nét thật giúp vẫn dễ bấm, nhưng fill hoặc khoảng rỗng bên trong không kích hoạt chọn.
+
 Vùng SVG nhận focus trong `onPointerDownCapture`, trước khi gesture gọi `preventDefault()`. Nhờ đó Delete/Backspace không còn bị giữ ở ô thuộc tính sau khi người dùng bấm chọn hình. Phím xóa vẫn sửa nội dung khi đang gõ chữ/số, còn thanh range và checkbox cho phép xóa đối tượng. Menu dùng listener capture để đóng khi bấm vào vùng vẽ.
 
 Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có trường này nghĩa là giao với mọi đối tượng; mảng rỗng nghĩa là không còn liên kết. Khi sao chép cả nhóm, các liên kết được đổi sang ID của bản sao. Bật lại Intersection trên toolbar chuyển đối tượng sang chế độ giao với mọi đối tượng. Undo/redo và JSON lưu các thuộc tính này cùng tài liệu.

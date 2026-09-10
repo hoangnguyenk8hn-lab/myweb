@@ -285,6 +285,7 @@ export function SceneElement({
           d={d}
           {...common}
           fill={e.type === "freehand" ? "none" : common.fill}
+          pointerEvents="none"
         />
         {interactive && (
           <path
@@ -292,6 +293,7 @@ export function SceneElement({
             fill="none"
             stroke="transparent"
             strokeWidth="10"
+            pointerEvents="stroke"
             data-hit-area
           />
         )}
@@ -309,7 +311,19 @@ export function SceneElement({
           {...common}
           fill={definition?.open ? "none" : common.fill}
           fillRule="evenodd"
+          pointerEvents="none"
         />
+        {interactive && (
+          <path
+            d={shapePath(shape, e.parameters)}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={Math.max(10, s.strokeWidth + 6)}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="stroke"
+            data-hit-area
+          />
+        )}
       </g>
     );
   }
@@ -325,7 +339,8 @@ export function SceneElement({
     >
       <PaintDefinition paint={s.fillPaint} id={paintId} bounds={b} />
       {content}
-      {interactive && !LINE_TYPES.has(e.type) && e.type !== "freehand" && (
+      {interactive &&
+        (TEXT_TYPES.has(e.type) || e.type === "image" || e.type === "plot") && (
         <rect
           x={b.x}
           y={b.y}
