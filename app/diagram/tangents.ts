@@ -12,8 +12,10 @@ import { transformPoint } from "./pathBounds";
 export type TangentCandidate = {
   /** Tangency point on the target object. */
   contact: Point;
-  /** End point used to draw the finite tangent segment. */
+  /** End point carrying the tangent direction. */
   end: Point;
+  /** The source itself lies on the target, so the result is a full two-sided line. */
+  throughSource?: boolean;
 };
 
 const SMOOTH_PATH_SHAPES = new Set([
@@ -69,7 +71,11 @@ function ellipseTangents(
 
   if (d2 < 1 - epsilon) return [];
 
-  const make = (nx: number, ny: number): TangentCandidate => {
+  const make = (
+    nx: number,
+    ny: number,
+    throughSource = false,
+  ): TangentCandidate => {
     const localContact = { x: cx + rx * nx, y: cy + ry * ny },
       contact = worldPoint(localContact, target),
       localDirection = { x: -rx * ny, y: ry * nx },
@@ -84,12 +90,16 @@ function ellipseTangents(
         x: directionPoint.x - contact.x,
         y: directionPoint.y - contact.y,
       };
-    return { contact, end: tangentEnd(source, contact, direction) };
+    return {
+      contact,
+      end: tangentEnd(source, contact, direction),
+      throughSource,
+    };
   };
 
   if (Math.abs(d2 - 1) <= epsilon) {
     const scale = 1 / Math.sqrt(Math.max(d2, 1e-20));
-    return [make(px * scale, py * scale)];
+    return [make(px * scale, py * scale, true)];
   }
 
   const a = 1 / d2,
@@ -223,9 +233,11 @@ function numericPathTangents(
       direction = tangentAt(root);
     if (!direction) continue;
     if (result.some((candidate) => distance(candidate.contact, contact) < 0.6)) continue;
+    const throughSource = distance(source, contact) < 0.6;
     result.push({
       contact,
       end: tangentEnd(source, contact, direction),
+      throughSource,
     });
   }
   return result;
