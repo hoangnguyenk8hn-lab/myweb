@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./current.css";
+import "./selection-overrides.css";
 
 export const metadata: Metadata = {
   title: "Diagram Draw",
