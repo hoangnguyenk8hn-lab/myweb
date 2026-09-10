@@ -29,6 +29,15 @@
   opacity: 0.5;
 }
 
+/* A construction/drawing tool owns the next pointer gesture. Keep the
+ * selection chrome visible as feedback, but let pointer input pass through it
+ * so a new Line/Curve/Tangent/etc. can start exactly on an existing handle or
+ * snap target. Select mode does not have .drawing-tool, so handles remain
+ * fully interactive there. */
+.canvas-viewport.drawing-tool .selection-layer {
+  pointer-events: none;
+}
+
 /* Let the drawing surface match the workspace frame instead of reserving the
  * old fixed 80px gutter. The canvas stays centered while it is smaller than
  * the viewport and grows naturally into the scroll area when zoomed larger. */
