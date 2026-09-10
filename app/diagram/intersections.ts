@@ -140,6 +140,7 @@ export function elementSegments(e: DiagramElement): Segment[] {
 export function elementTouchesRect(e: DiagramElement, rect: Bounds): boolean {
   const box = worldBounds(e);
   if (!overlaps(box, rect)) return false;
+  if (e.type === "point") return true;
 
   // These are area objects: a partial overlap with their visible frame counts.
   if (TEXT_TYPES.has(e.type) || e.type === "image" || e.type === "plot")
@@ -343,13 +344,14 @@ function inBreak(p: Point, e: DiagramElement) {
   return Math.hypot(p.x - mid.x, p.y - mid.y) < e.breakSize / 2;
 }
 /** Intersection follows actual transformed contours; blocking takes precedence.
- * Image/text/plot objects participate through their frame. */
+ * Image/text/plot objects participate through their frame. Point objects are
+ * snap anchors only and intentionally do not create geometric intersections. */
 export function collectIntersections(
   elements: DiagramElement[],
 ): IntersectionMark[] {
   if (!elements.some((e) => e.intersection && !e.blockIntersection)) return [];
   const entries = elements
-    .filter((e) => !e.blockIntersection && e.style.opacity > 0)
+    .filter((e) => e.type !== "point" && !e.blockIntersection && e.style.opacity > 0)
     .map((e, index) => ({ e, index, b: worldBounds(e) }))
     .sort((a, b) => a.b.x - b.b.x);
   const marks: IntersectionMark[] = [];
