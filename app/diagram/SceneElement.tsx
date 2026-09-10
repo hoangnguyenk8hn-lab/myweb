@@ -9,6 +9,7 @@ import {
   linePath,
   LINE_TYPES,
   markerDimension,
+  pointRadius,
   polycurvePath,
   sceneBounds,
   elementShapeId,
@@ -107,7 +108,32 @@ export function SceneElement({
   );
   const middle = linePoint(e, (e.breakPosition ?? 50) / 100);
   let content: React.ReactNode;
-  if (LINE_TYPES.has(e.type)) {
+  if (e.type === "point") {
+    const r = pointRadius(e);
+    content = (
+      <>
+        <circle
+          cx={e.x}
+          cy={e.y}
+          r={r}
+          fill={s.stroke === "transparent" ? "none" : s.stroke}
+          stroke="none"
+          vectorEffect="non-scaling-stroke"
+        />
+        {interactive && (
+          <circle
+            cx={e.x}
+            cy={e.y}
+            r={Math.max(6, r + 4)}
+            fill="transparent"
+            stroke="none"
+            pointerEvents="all"
+            data-hit-area
+          />
+        )}
+      </>
+    );
+  } else if (LINE_TYPES.has(e.type)) {
     const d = linePath(e);
     const before = linePoint(
         e,
