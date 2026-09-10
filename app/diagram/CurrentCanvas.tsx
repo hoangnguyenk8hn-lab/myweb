@@ -883,12 +883,18 @@ export function CurrentCanvas(p: Props) {
             ? current
             : best,
         );
+        const lineStart = candidate.throughSource
+          ? {
+              x: 2 * g.start.x - candidate.end.x,
+              y: 2 * g.start.y - candidate.end.y,
+            }
+          : g.start;
         const line = makeElement(
           "line",
-          g.start.x,
-          g.start.y,
-          candidate.end.x - g.start.x,
-          candidate.end.y - g.start.y,
+          lineStart.x,
+          lineStart.y,
+          candidate.end.x - lineStart.x,
+          candidate.end.y - lineStart.y,
         );
         p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
         p.onSelect([line.id]);
@@ -1115,7 +1121,7 @@ export function CurrentCanvas(p: Props) {
                   {tangentPreview?.candidates.map((candidate, i) => (
                     <g key={`${candidate.contact.x}-${candidate.contact.y}-${i}`}>
                       <path
-                        d={`M${tangentStart.x} ${tangentStart.y}L${candidate.end.x} ${candidate.end.y}`}
+                        d={`M${candidate.throughSource ? 2 * tangentStart.x - candidate.end.x : tangentStart.x} ${candidate.throughSource ? 2 * tangentStart.y - candidate.end.y : tangentStart.y}L${candidate.end.x} ${candidate.end.y}`}
                         fill="none"
                         stroke={i === tangentPreview.active ? "#2f9e5b" : "#8cb99a"}
                         strokeWidth={(i === tangentPreview.active ? 1.7 : 0.9) / zoom}
