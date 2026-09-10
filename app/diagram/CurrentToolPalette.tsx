@@ -125,6 +125,15 @@ export function CurrentToolPalette({
         <div className="shape-grid line-tools">
           {basic("line", "Line")}
           {basic("curve", "Curve")}
+          {basic(
+            "tangent",
+            "Tangent from Point",
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <circle cx="19" cy="14" r="7" />
+              <circle cx="5" cy="22" r="1.7" fill="currentColor" stroke="none" />
+              <path d="M5 22L14.5 8.6" />
+            </svg>,
+          )}
           {basic("arrow", "Arrow")}
           {basic("curved-arrow", "Curved Arrow")}
           {basic(
