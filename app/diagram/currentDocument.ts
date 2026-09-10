@@ -1,7 +1,7 @@
 import { createId, DEFAULT_STYLE } from "./defaultDocument";
 import { DEFAULT_PLOT } from "./plotting";
 import { SHAPE_MAP } from "./shapes";
-import { DEFAULT_POINT_SIZE } from "./sceneGeometryBase";
+import { DEFAULT_POINT_SIZE } from "./sceneGeometry";
 import type { DiagramDocument, DiagramElement, DiagramTool } from "./types";
 
 export const CURRENT_STORAGE_KEY = "diagram-draw-current-v2";
