@@ -30,6 +30,7 @@ import {
   center,
   curveControls,
   drawElement,
+  elementShapeId,
   elementTransform,
   isCurve,
   lineSegmentPoint,
@@ -106,6 +107,16 @@ interface Props {
   onPlot: (id: string) => void;
   onCommand: (name: string) => void;
 }
+const CIRCULAR_HANDLE_DIRECTIONS = {
+  nw: [-Math.SQRT1_2, -Math.SQRT1_2],
+  n: [0, -1],
+  ne: [Math.SQRT1_2, -Math.SQRT1_2],
+  e: [1, 0],
+  se: [Math.SQRT1_2, Math.SQRT1_2],
+  s: [0, 1],
+  sw: [-Math.SQRT1_2, Math.SQRT1_2],
+  w: [-1, 0],
+} as const;
 function union(elements: DiagramElement[]): Box {
   const boxes = elements.map(elements.length === 1 ? sceneBounds : worldBounds);
   const x = Math.min(...boxes.map((b) => b.x)),
@@ -169,6 +180,18 @@ export function CurrentCanvas(p: Props) {
   );
   const single = selected.length === 1 ? selected[0] : undefined;
   const box = selected.length ? union(selected) : null;
+  const singleShape = single ? elementShapeId(single) : undefined;
+  const regularPolygonSelection =
+    single && singleShape === "regular-polygon"
+      ? {
+          cx: center(single).x,
+          cy: center(single).y,
+          r: Math.max(Math.abs(single.width), Math.abs(single.height)) * 0.43,
+        }
+      : null;
+  const showSelectionCenter =
+    !!single &&
+    (singleShape === "circle" || single.textBorder === "circle" || !!single.boxed);
   const edit = elements.find((e) => e.id === p.editId);
   useEffect(() => {
     if (vertexSelection && !selectedIds.includes(vertexSelection.id))
@@ -1183,33 +1206,55 @@ export function CurrentCanvas(p: Props) {
                     <g
                       transform={single ? elementTransform(single) : undefined}
                     >
-                      <rect
-                        {...box}
-                        fill="none"
-                        stroke="#70b37f"
-                        strokeWidth={0.7 / zoom}
-                        pointerEvents="none"
-                      />
+                      {regularPolygonSelection ? (
+                        <circle
+                          cx={regularPolygonSelection.cx}
+                          cy={regularPolygonSelection.cy}
+                          r={regularPolygonSelection.r}
+                          fill="none"
+                          stroke="#70b37f"
+                          strokeWidth={0.7 / zoom}
+                          pointerEvents="none"
+                        />
+                      ) : (
+                        <rect
+                          {...box}
+                          fill="none"
+                          stroke="#70b37f"
+                          strokeWidth={0.7 / zoom}
+                          pointerEvents="none"
+                        />
+                      )}
                       {!single?.locked &&
                         (
                           ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const
                         ).map((name) => {
-                          const q = {
-                            x:
-                              box.x +
-                              (name.includes("w")
-                                ? 0
-                                : name.includes("e")
-                                  ? box.width
-                                  : box.width / 2),
-                            y:
-                              box.y +
-                              (name.includes("n")
-                                ? 0
-                                : name.includes("s")
-                                  ? box.height
-                                  : box.height / 2),
-                          };
+                          const direction = CIRCULAR_HANDLE_DIRECTIONS[name];
+                          const q = regularPolygonSelection
+                            ? {
+                                x:
+                                  regularPolygonSelection.cx +
+                                  regularPolygonSelection.r * direction[0],
+                                y:
+                                  regularPolygonSelection.cy +
+                                  regularPolygonSelection.r * direction[1],
+                              }
+                            : {
+                                x:
+                                  box.x +
+                                  (name.includes("w")
+                                    ? 0
+                                    : name.includes("e")
+                                      ? box.width
+                                      : box.width / 2),
+                                y:
+                                  box.y +
+                                  (name.includes("n")
+                                    ? 0
+                                    : name.includes("s")
+                                      ? box.height
+                                      : box.height / 2),
+                              };
                           return (
                             <rect
                               key={name}
@@ -1235,13 +1280,27 @@ export function CurrentCanvas(p: Props) {
                       {single && !single.locked && (
                         <>
                           <path
-                            d={`M${box.x + box.width / 2} ${box.y}v${-22 / zoom}`}
+                            d={
+                              regularPolygonSelection
+                                ? `M${regularPolygonSelection.cx} ${regularPolygonSelection.cy - regularPolygonSelection.r}v${-22 / zoom}`
+                                : `M${box.x + box.width / 2} ${box.y}v${-22 / zoom}`
+                            }
                             stroke="#87ab8e"
                             strokeWidth={0.7 / zoom}
                           />
                           <circle
-                            cx={box.x + box.width / 2}
-                            cy={box.y - 24 / zoom}
+                            cx={
+                              regularPolygonSelection
+                                ? regularPolygonSelection.cx
+                                : box.x + box.width / 2
+                            }
+                            cy={
+                              regularPolygonSelection
+                                ? regularPolygonSelection.cy -
+                                  regularPolygonSelection.r -
+                                  24 / zoom
+                                : box.y - 24 / zoom
+                            }
                             r={4 / zoom}
                             fill="#e9b265"
                             stroke="#cd9546"
@@ -1263,6 +1322,23 @@ export function CurrentCanvas(p: Props) {
                             }
                           />
                         </>
+                      )}
+                      {single && showSelectionCenter && (
+                        <g pointerEvents="none" data-selection-center>
+                          <circle
+                            cx={center(single).x}
+                            cy={center(single).y}
+                            r={3.2 / zoom}
+                            fill="white"
+                            stroke="#4f9f65"
+                            strokeWidth={0.8 / zoom}
+                          />
+                          <path
+                            d={`M${center(single).x - 5 / zoom} ${center(single).y}H${center(single).x + 5 / zoom}M${center(single).x} ${center(single).y - 5 / zoom}V${center(single).y + 5 / zoom}`}
+                            stroke="#4f9f65"
+                            strokeWidth={0.7 / zoom}
+                          />
+                        </g>
                       )}
                       {single &&
                         ["polyline", "polycurve"].includes(single.type) &&
