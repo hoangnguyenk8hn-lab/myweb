@@ -121,7 +121,7 @@ export interface DiagramElement {
   /** Omitted: intersect every object. Present: only these linked objects. */
   intersectionWith?: string[];
   blockIntersection?: boolean;
-  intersectionKind?: "circle" | "dot" | "cross";
+  intersectionKind?: "circle" | "dot" | "cross" | "hidden";
   intersectionSize?: number;
   /** Nominal symbol stroke size, matching line markers (0.1–2 px). */
   intersectionMarkerSize?: number;
