@@ -52,6 +52,11 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
+import {
+  tangentCandidates,
+  tangentTargetAt,
+  type TangentCandidate,
+} from "./tangents";
 import type {
   DiagramDocument,
   DiagramElement,
@@ -69,6 +74,7 @@ type Gesture =
       points: Point[];
       original: DiagramElement;
     }
+  | { kind: "tangent"; start: Point }
   | {
       kind: "move";
       start: Point;
@@ -186,6 +192,12 @@ export function CurrentCanvas(p: Props) {
     [dragging, setDragging] = useState(false),
     [context, setContext] = useState<Point | null>(null),
     [polyPreview, setPolyPreview] = useState<Point | null>(null),
+    [tangentStart, setTangentStart] = useState<Point | null>(null),
+    [tangentPreview, setTangentPreview] = useState<{
+      targetId: string;
+      candidates: TangentCandidate[];
+      active: number;
+    } | null>(null),
     [vertexSelection, setVertexSelection] = useState<{
       id: string;
       index: number;
@@ -222,6 +234,12 @@ export function CurrentCanvas(p: Props) {
     if (vertexSelection && !selectedIds.includes(vertexSelection.id))
       setVertexSelection(null);
   }, [selectedIds, vertexSelection]);
+  useEffect(() => {
+    if (tool !== "tangent") {
+      setTangentStart(null);
+      setTangentPreview(null);
+    }
+  }, [tool]);
   const pos = (event: { clientX: number; clientY: number }): Point => {
     const svg = p.svgRef.current;
     if (!svg) return { x: 0, y: 0 };
@@ -396,6 +414,8 @@ export function CurrentCanvas(p: Props) {
         setDragging(false);
         setMarquee(null);
         setPolyPreview(null);
+        setTangentStart(null);
+        setTangentPreview(null);
         setSnapLines({});
         p.onCancel();
         setContext(null);
@@ -468,6 +488,14 @@ export function CurrentCanvas(p: Props) {
         add: event.shiftKey ? selectedIds : [],
       });
       setMarquee({ ...q, width: 0, height: 0 });
+      return;
+    }
+    if (tool === "tangent") {
+      const start = snap(q, []);
+      setTangentStart(start);
+      setTangentPreview(null);
+      p.onSelect([]);
+      begin(event, { kind: "tangent", start });
       return;
     }
     if (tool === "polyline" || tool === "polycurve") {
@@ -581,6 +609,31 @@ export function CurrentCanvas(p: Props) {
         width: Math.max(100, Math.round(g.width + raw.x - g.start.x)),
         height: Math.max(100, Math.round(g.height + raw.y - g.start.y)),
       }));
+      return;
+    }
+    if (g.kind === "tangent") {
+      const target = tangentTargetAt(q, elements, zoom);
+      if (!target) {
+        setTangentPreview(null);
+        return;
+      }
+      const candidates =
+        tangentPreview?.targetId === target.id
+          ? tangentPreview.candidates
+          : tangentCandidates(g.start, target);
+      let active = -1,
+        best = Infinity;
+      candidates.forEach((candidate, i) => {
+        const d = Math.hypot(
+          q.x - candidate.contact.x,
+          q.y - candidate.contact.y,
+        );
+        if (d < best) {
+          best = d;
+          active = i;
+        }
+      });
+      setTangentPreview({ targetId: target.id, candidates, active });
       return;
     }
     if (g.kind === "draw") {
@@ -820,6 +873,29 @@ export function CurrentCanvas(p: Props) {
         ]),
       ]);
       setMarquee(null);
+    } else if (g.kind === "tangent") {
+      const target = tangentTargetAt(q, elements, zoom),
+        candidates = target ? tangentCandidates(g.start, target) : [];
+      if (candidates.length) {
+        const candidate = candidates.reduce((best, current) =>
+          Math.hypot(q.x - current.contact.x, q.y - current.contact.y) <
+          Math.hypot(q.x - best.contact.x, q.y - best.contact.y)
+            ? current
+            : best,
+        );
+        const line = makeElement(
+          "line",
+          g.start.x,
+          g.start.y,
+          candidate.end.x - g.start.x,
+          candidate.end.y - g.start.y,
+        );
+        p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
+        p.onSelect([line.id]);
+        p.onEnd();
+      } else p.onCancel();
+      setTangentStart(null);
+      setTangentPreview(null);
     } else if (g.kind !== "pan") {
       if (g.kind === "draw" && Math.hypot(q.x - g.start.x, q.y - g.start.y) < 4)
         patch(
@@ -954,6 +1030,8 @@ export function CurrentCanvas(p: Props) {
               snappedTarget.current = null;
               setSnapPoint(null);
               setDragging(false);
+              setTangentStart(null);
+              setTangentPreview(null);
               setSnapLines({});
               p.onCancel();
             }}
@@ -1024,6 +1102,50 @@ export function CurrentCanvas(p: Props) {
             ))}
             <IntersectionLayer marks={intersections} />
             <g className="selection-layer" data-ui>
+              {tangentStart && (
+                <g pointerEvents="none" data-tangent-preview>
+                  <circle
+                    cx={tangentStart.x}
+                    cy={tangentStart.y}
+                    r={4 / zoom}
+                    fill="#ffffff"
+                    stroke="#348b57"
+                    strokeWidth={1.2 / zoom}
+                  />
+                  {tangentPreview?.candidates.map((candidate, i) => (
+                    <g key={`${candidate.contact.x}-${candidate.contact.y}-${i}`}>
+                      <path
+                        d={`M${tangentStart.x} ${tangentStart.y}L${candidate.end.x} ${candidate.end.y}`}
+                        fill="none"
+                        stroke={i === tangentPreview.active ? "#2f9e5b" : "#8cb99a"}
+                        strokeWidth={(i === tangentPreview.active ? 1.7 : 0.9) / zoom}
+                        strokeDasharray={i === tangentPreview.active ? undefined : `${4 / zoom} ${3 / zoom}`}
+                      />
+                      <circle
+                        cx={candidate.contact.x}
+                        cy={candidate.contact.y}
+                        r={(i === tangentPreview.active ? 4 : 3) / zoom}
+                        fill={i === tangentPreview.active ? "#2f9e5b" : "white"}
+                        stroke="#2f9e5b"
+                        strokeWidth={1 / zoom}
+                      />
+                    </g>
+                  ))}
+                  {tangentPreview && tangentPreview.candidates.length === 0 && (
+                    <text
+                      x={tangentStart.x + 10 / zoom}
+                      y={tangentStart.y - 10 / zoom}
+                      fontSize={11 / zoom}
+                      fill="#b04a4a"
+                      stroke="white"
+                      strokeWidth={3 / zoom}
+                      paintOrder="stroke"
+                    >
+                      No tangent
+                    </text>
+                  )}
+                </g>
+              )}
               {snapPoint && (
                 <g pointerEvents="none" data-snap-kind={snapPoint.kind}>
                   <circle
