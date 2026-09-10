@@ -1,6 +1,7 @@
 import { createId, DEFAULT_STYLE } from "./defaultDocument";
 import { DEFAULT_PLOT } from "./plotting";
 import { SHAPE_MAP } from "./shapes";
+import { DEFAULT_POINT_SIZE } from "./sceneGeometryBase";
 import type { DiagramDocument, DiagramElement, DiagramTool } from "./types";
 
 export const CURRENT_STORAGE_KEY = "diagram-draw-current-v2";
@@ -35,14 +36,15 @@ export function makeElement(
       : (tool as DiagramElement["type"]);
   const text = ["text", "plain-text", "boxed-text"].includes(type);
   const line = ["line", "arrow", "curve", "curved-arrow"].includes(type);
+  const point = type === "point";
   return {
     id: createId(type),
     type,
     shape,
     x,
     y,
-    width: text ? (type === "text" ? 24 : 48) : width,
-    height: text ? 29 : height,
+    width: point ? 0 : text ? (type === "text" ? 24 : 48) : width,
+    height: point ? 0 : text ? 29 : height,
     rotation: 0,
     style: {
       ...DEFAULT_STYLE,
@@ -50,6 +52,7 @@ export function makeElement(
       strokeWidth: 1,
       fill: "transparent",
     },
+    ...(point ? { pointSize: DEFAULT_POINT_SIZE } : {}),
     ...(text
       ? {
           text: type === "text" ? "x" : "Text",
