@@ -3,6 +3,7 @@ import {
   absolutePoints,
   center,
   elementShapeId,
+  isPointElement,
   LINE_TYPES,
   pointRadius,
   worldPoint,
@@ -39,7 +40,7 @@ export const SNAP_LABELS: Record<SnapTarget["kind"], string> = {
 const cache = new Map<string, Omit<SnapTarget, "ids">[]>();
 
 export function objectSnapTargets(e: DiagramElement): SnapTarget[] {
-  if (e.type === "point")
+  if (isPointElement(e))
     return [
       {
         point: worldPoint({ x: e.x, y: e.y }, e),
