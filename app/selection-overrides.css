@@ -39,3 +39,10 @@
   min-height: 100% !important;
   padding: 0;
 }
+
+/* Tangent adds another construction tool; let the line palette wrap instead
+ * of clipping the second row behind the old fixed 31px height. */
+.line-tools {
+  height: auto;
+  min-height: 31px;
+}
