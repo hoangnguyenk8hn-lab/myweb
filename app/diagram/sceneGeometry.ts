@@ -16,6 +16,8 @@ import { isAltModifierDown } from "./modifierState";
 export * from "./sceneGeometryBase";
 
 export const DEFAULT_POINT_SIZE = 0.4;
+export const isPointElement = (e: DiagramElement) =>
+  e.type === "point" || e.shape === "point";
 export function pointRadius(e: DiagramElement) {
   return Math.max(0.1, Math.min(2, e.pointSize ?? DEFAULT_POINT_SIZE)) * 4;
 }
@@ -56,13 +58,13 @@ export function resolveElement(
 
 /** A Point is one geometric coordinate; its marker size is visual only. */
 export function sceneBounds(e: DiagramElement): Bounds {
-  if (e.type !== "point") return baseSceneBounds(e);
+  if (!isPointElement(e)) return baseSceneBounds(e);
   const r = pointRadius(e);
   return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
 }
 
 export function worldBounds(e: DiagramElement): Bounds {
-  if (e.type !== "point") return baseWorldBounds(e);
+  if (!isPointElement(e)) return baseWorldBounds(e);
   const r = pointRadius(e);
   return { x: e.x - r, y: e.y - r, width: 2 * r, height: 2 * r };
 }
@@ -73,7 +75,7 @@ export function drawElement(
   end: Point,
   square = false,
 ): DiagramElement {
-  if (e.type === "point")
+  if (isPointElement(e))
     return { ...e, x: start.x, y: start.y, width: 0, height: 0 };
   return baseDrawElement(e, start, end, square);
 }
@@ -85,7 +87,7 @@ export function drawElement(
  * circle and its endpoint moves again when the opposite endpoint is dragged.
  */
 export function within(p: Point, e: DiagramElement, padding = 0) {
-  if (e.type === "point") return false;
+  if (isPointElement(e)) return false;
   const shape = e.shape ?? e.type;
   const round =
     ROUND_ATTACHMENT_SHAPES.has(shape) ||
@@ -168,7 +170,7 @@ export function resizeElements(
   to: Bounds,
   local = elements.length === 1,
 ): DiagramElement[] {
-  if (elements.length === 1 && elements[0].type === "point") return elements;
+  if (elements.length === 1 && isPointElement(elements[0])) return elements;
   return baseResizeElements(
     elements,
     from,
