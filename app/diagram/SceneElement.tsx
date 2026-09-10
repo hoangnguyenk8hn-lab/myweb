@@ -72,7 +72,16 @@ export function SceneElement({
 }) {
   const s = e.style,
     c = center(e),
-    b = sceneBounds(e);
+    b = sceneBounds(e),
+    shapeId = elementShapeId(e),
+    directVectorStroke =
+      LINE_TYPES.has(e.type) ||
+      TEXT_TYPES.has(e.type) ||
+      ["polyline", "polycurve", "freehand"].includes(e.type),
+    smoothScaledCircle = !directVectorStroke && shapeId === "circle",
+    circleScale = smoothScaledCircle
+      ? Math.max(1e-8, (Math.abs(e.width) + Math.abs(e.height)) / 200)
+      : 1;
   const id = e.id.replace(/[^a-zA-Z0-9_-]/g, "");
   const paintId = `paint-${id}`;
   const common = {
@@ -82,12 +91,16 @@ export function SceneElement({
       : s.fill === "transparent"
         ? "none"
         : s.fill,
-    strokeWidth: s.strokeWidth,
+    strokeWidth: smoothScaledCircle ? s.strokeWidth / circleScale : s.strokeWidth,
     strokeDasharray:
       s.dash === "dashed" ? "6 4" : s.dash === "dotted" ? "1 3" : undefined,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    vectorEffect: "non-scaling-stroke" as const,
+    shapeRendering: "geometricPrecision" as const,
+    vectorEffect:
+      directVectorStroke || smoothScaledCircle
+        ? undefined
+        : ("non-scaling-stroke" as const),
   };
   const transform = elementTransform(e);
   const markerSize = markerDimension(e, "mid");
@@ -108,6 +121,7 @@ export function SceneElement({
   );
   const middle = linePoint(e, (e.breakPosition ?? 50) / 100);
   let content: React.ReactNode;
+
   if (e.type === "point" || e.shape === "point") {
     const r = pointRadius(e);
     content = (
@@ -118,7 +132,7 @@ export function SceneElement({
           r={r}
           fill={s.stroke === "transparent" ? "none" : s.stroke}
           stroke="none"
-          vectorEffect="non-scaling-stroke"
+          shapeRendering="geometricPrecision"
         />
         {interactive && (
           <circle
@@ -319,6 +333,7 @@ export function SceneElement({
             fill="none"
             stroke="transparent"
             strokeWidth="10"
+            vectorEffect="non-scaling-stroke"
             pointerEvents="stroke"
             data-hit-area
           />
@@ -326,14 +341,13 @@ export function SceneElement({
       </>
     );
   } else {
-    const shape = elementShapeId(e);
-    const definition = SHAPE_MAP[shape];
+    const definition = SHAPE_MAP[shapeId];
     content = (
       <g
         transform={`translate(${e.x} ${e.y}) scale(${e.width / 100} ${e.height / 100})`}
       >
         <path
-          d={shapePath(shape, e.parameters)}
+          d={shapePath(shapeId, e.parameters)}
           {...common}
           fill={definition?.open ? "none" : common.fill}
           fillRule="evenodd"
@@ -341,7 +355,7 @@ export function SceneElement({
         />
         {interactive && (
           <path
-            d={shapePath(shape, e.parameters)}
+            d={shapePath(shapeId, e.parameters)}
             fill="none"
             stroke="transparent"
             strokeWidth={Math.max(10, s.strokeWidth + 6)}
