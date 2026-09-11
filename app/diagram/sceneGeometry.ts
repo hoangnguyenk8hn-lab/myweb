@@ -145,9 +145,10 @@ function projectEndpointToOriginalAxis(
 
 /**
  * Option-dragging either endpoint of a simple Line keeps its original midpoint
- * fixed. The dragged endpoint follows the pointer freely and the opposite end
- * is reflected through that midpoint. Applying the two endpoint moves through
- * the base helper preserves rotation/skew and the endpoint world positions.
+ * fixed while preserving the old axis-locked stretch behavior. The pointer is
+ * projected onto the Line's original supporting direction; the dragged endpoint
+ * follows that projected position and the opposite end is reflected through the
+ * fixed midpoint.
  */
 function moveLineEndpointAroundCenter(
   e: DiagramElement,
@@ -164,12 +165,13 @@ function moveLineEndpointAroundCenter(
       x: (start.x + end.x) / 2,
       y: (start.y + end.y) / 2,
     },
+    projectedTarget = projectEndpointToOriginalAxis(e, index, target),
     opposite = {
-      x: 2 * midpoint.x - target.x,
-      y: 2 * midpoint.y - target.y,
+      x: 2 * midpoint.x - projectedTarget.x,
+      y: 2 * midpoint.y - projectedTarget.y,
     };
 
-  const moved = baseMoveLineEndpoint(e, index, target);
+  const moved = baseMoveLineEndpoint(e, index, projectedTarget);
   return baseMoveLineEndpoint(moved, index ? 0 : 1, opposite);
 }
 
