@@ -61,7 +61,11 @@ export type ArrowHead =
   | "bar-open"
   | "cross"
   | "plus"
-  | "arc";
+  | "arc"
+  | "right-angle-inside-left"
+  | "right-angle-inside-right"
+  | "right-angle-outside-left"
+  | "right-angle-outside-right";
 
 export interface ElementStyle {
   stroke: string;
