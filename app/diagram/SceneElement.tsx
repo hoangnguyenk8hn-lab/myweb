@@ -20,6 +20,10 @@ import { MathFormula } from "./MathFormula";
 import { PlotGraphic } from "./PlotGraphic";
 import { PaintDefinition } from "./PaintDefinition";
 
+function isRightAngleMarker(type: ArrowHead) {
+  return type.startsWith("right-angle-");
+}
+
 export function MarkerGlyph({
   type,
   color = "currentColor",
@@ -51,6 +55,14 @@ export function MarkerGlyph({
       return <path d="M0 5H10M5 0V10" {...common} />;
     case "arc":
       return <path d="M3 0Q10 5 3 10" {...common} />;
+    case "right-angle-inside-left":
+      return <path d="M5 5V1H1V5" {...common} />;
+    case "right-angle-inside-right":
+      return <path d="M5 5V9H1V5" {...common} />;
+    case "right-angle-outside-left":
+      return <path d="M5 5V1H9V5" {...common} />;
+    case "right-angle-outside-right":
+      return <path d="M5 5V9H9V5" {...common} />;
     default:
       return null;
   }
@@ -109,7 +121,7 @@ export function SceneElement({
       key={position}
       id={`${position}-${id}`}
       viewBox="0 0 10 10"
-      refX="8"
+      refX={isRightAngleMarker(head) ? 5 : 8}
       refY="5"
       markerWidth={markerDimension(e, position === "tail" ? "start" : "end")}
       markerHeight={markerDimension(e, position === "tail" ? "start" : "end")}
