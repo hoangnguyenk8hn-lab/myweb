@@ -107,6 +107,16 @@ export function CurrentToolPalette({
               <circle cx="14" cy="14" r="3" fill="currentColor" />
             </svg>,
           )}
+          {basic(
+            "point-reflection",
+            "Reflect Point",
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <circle cx="6" cy="9" r="2.2" fill="currentColor" stroke="none" />
+              <circle cx="22" cy="19" r="2.2" fill="currentColor" stroke="none" />
+              <circle cx="14" cy="14" r="1.7" fill="white" />
+              <path d="M7.8 10.1L12.5 13M15.5 15L20.2 17.9M10 21L18 7" />
+            </svg>,
+          )}
           {basic("text", "Math", "ƒx")}
           {basic(
             "plain-text",
