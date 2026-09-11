@@ -1,5 +1,3 @@
-import type { ConstructionSpec } from "./constructionTypes";
-
 export type Point = { x: number; y: number };
 
 export type DiagramTool =
@@ -92,8 +90,6 @@ export interface DiagramElement {
   height: number;
   rotation: number;
   style: ElementStyle;
-  /** Persistent geometric dependency. Omitted means this is a Free element. */
-  construction?: ConstructionSpec;
   text?: string;
   fontSize?: number;
   startHead?: ArrowHead;
