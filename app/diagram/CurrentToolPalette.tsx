@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BASIC_SHAPES,
   COORDINATE_SHAPES,
@@ -7,6 +7,10 @@ import {
   type ShapeDefinition,
 } from "./shapes";
 import { ToolIcon } from "./catalog";
+import {
+  setAssistedLineConstruction,
+  type AssistedLineConstruction,
+} from "./constructionMode";
 import type { DiagramTool, PlotSettings } from "./types";
 
 const ShapeButton = ({
@@ -52,10 +56,20 @@ export function CurrentToolPalette({
   onPlot: (kind: PlotSettings["kind"]) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
-    general: true,
-    lines: true,
-    document: true,
-  });
+      general: true,
+      lines: true,
+      document: true,
+    }),
+    [assistedLine, setAssistedLine] =
+      useState<AssistedLineConstruction>("perpendicular");
+
+  useEffect(() => {
+    if (activeTool !== "perpendicular") {
+      setAssistedLine("perpendicular");
+      setAssistedLineConstruction("perpendicular");
+    }
+  }, [activeTool]);
+
   const header = (id: string, label: string) => (
     <button
       className="category-heading"
@@ -73,7 +87,11 @@ export function CurrentToolPalette({
           key={shape.id}
           shape={shape}
           active={activeTool === `shape:${shape.id}`}
-          onSelect={() => onSelect(`shape:${shape.id}`)}
+          onSelect={() => {
+            setAssistedLine("perpendicular");
+            setAssistedLineConstruction("perpendicular");
+            onSelect(`shape:${shape.id}`);
+          }}
         />
       ))}
     </div>
@@ -89,11 +107,38 @@ export function CurrentToolPalette({
       title={label}
       aria-label={label}
       aria-pressed={activeTool === tool}
-      onClick={() => onSelect(tool)}
+      onClick={() => {
+        setAssistedLine("perpendicular");
+        setAssistedLineConstruction("perpendicular");
+        onSelect(tool);
+      }}
     >
       {content ?? <ToolIcon tool={tool} size={22} />}
     </button>
   );
+  const assistedLineButton = (
+    mode: AssistedLineConstruction,
+    label: string,
+    content: React.ReactNode,
+  ) => {
+    const active = activeTool === "perpendicular" && assistedLine === mode;
+    return (
+      <button
+        className={`shape-button${active ? " active" : ""}`}
+        key={mode}
+        title={label}
+        aria-label={label}
+        aria-pressed={active}
+        onClick={() => {
+          setAssistedLine(mode);
+          setAssistedLineConstruction(mode);
+          onSelect("perpendicular");
+        }}
+      >
+        {content}
+      </button>
+    );
+  };
   return (
     <aside className="shape-sidebar" aria-label="Drawing tools">
       {header("general", "General")}
@@ -144,11 +189,19 @@ export function CurrentToolPalette({
               <path d="M5 22L14.5 8.6" />
             </svg>,
           )}
-          {basic(
+          {assistedLineButton(
             "perpendicular",
             "Perpendicular Line",
             <svg viewBox="0 0 28 28" aria-hidden="true">
               <path d="M4 21H24M14 21V5M14 16H19V21" />
+            </svg>,
+          )}
+          {assistedLineButton(
+            "angle-bisector",
+            "Angle Bisector",
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <path d="M5 23L14 5M5 23L24 17M5 23L22 12" />
+              <path d="M11 18A7 7 0 0 1 13.5 20.5M13.5 20.5A7 7 0 0 1 15 16.7" />
             </svg>,
           )}
           {basic("arrow", "Arrow")}
@@ -181,7 +234,11 @@ export function CurrentToolPalette({
                 aria-label={shape.label}
                 className={`labeled-shape${activeTool === `shape:${shape.id}` ? " active" : ""}`}
                 key={shape.id}
-                onClick={() => onSelect(`shape:${shape.id}`)}
+                onClick={() => {
+                  setAssistedLine("perpendicular");
+                  setAssistedLineConstruction("perpendicular");
+                  onSelect(`shape:${shape.id}`);
+                }}
               >
                 <svg viewBox="0 0 110 110">
                   <path
@@ -213,7 +270,15 @@ export function CurrentToolPalette({
               ["parametric", "Parametric Plot"],
             ] as const
           ).map(([kind, label]) => (
-            <button key={kind} title={label} onClick={() => onPlot(kind)}>
+            <button
+              key={kind}
+              title={label}
+              onClick={() => {
+                setAssistedLine("perpendicular");
+                setAssistedLineConstruction("perpendicular");
+                onPlot(kind);
+              }}
+            >
               <svg viewBox="0 0 42 34">
                 <path
                   d="M4 3V29H40M4 23L12 16L22 21L30 9L38 4"
@@ -234,7 +299,11 @@ export function CurrentToolPalette({
             className="shape-button"
             title="Image"
             aria-label="Image"
-            onClick={onImage}
+            onClick={() => {
+              setAssistedLine("perpendicular");
+              setAssistedLineConstruction("perpendicular");
+              onImage();
+            }}
           >
             <svg viewBox="0 0 28 28">
               <path d="M3 5H25V23H3ZM5 20L11 12L16 17L20 13L24 20" />
