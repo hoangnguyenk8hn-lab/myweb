@@ -143,17 +143,51 @@ function projectEndpointToOriginalAxis(
   return { x: anchor.x + t * dx, y: anchor.y + t * dy };
 }
 
+/**
+ * Option-dragging either endpoint of a simple Line keeps its original midpoint
+ * fixed. The dragged endpoint follows the pointer freely and the opposite end
+ * is reflected through that midpoint. Applying the two endpoint moves through
+ * the base helper preserves rotation/skew and the endpoint world positions.
+ */
+function moveLineEndpointAroundCenter(
+  e: DiagramElement,
+  index: number,
+  target: Point,
+): DiagramElement | null {
+  if (e.type !== "line") return null;
+  const vertices = lineVertices(e);
+  if (vertices.length !== 2) return null;
+
+  const start = worldPoint(vertices[0], e),
+    end = worldPoint(vertices[1], e),
+    midpoint = {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+    },
+    opposite = {
+      x: 2 * midpoint.x - target.x,
+      y: 2 * midpoint.y - target.y,
+    };
+
+  const moved = baseMoveLineEndpoint(e, index, target);
+  return baseMoveLineEndpoint(moved, index ? 0 : 1, opposite);
+}
+
 export function moveLineEndpoint(
   e: DiagramElement,
   index: number,
   target: Point,
 ): DiagramElement {
+  if (!isAltModifierDown()) return baseMoveLineEndpoint(e, index, target);
+
+  const centered = moveLineEndpointAroundCenter(e, index, target);
+  if (centered) return centered;
+
+  // Preserve the previous Option behavior for arrows and multi-vertex lines.
   return baseMoveLineEndpoint(
     e,
     index,
-    isAltModifierDown()
-      ? projectEndpointToOriginalAxis(e, index, target)
-      : target,
+    projectEndpointToOriginalAxis(e, index, target),
   );
 }
 
