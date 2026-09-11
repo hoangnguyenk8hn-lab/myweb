@@ -144,52 +144,21 @@ function projectEndpointToOriginalAxis(
 }
 
 /**
- * Option-dragging either endpoint of a simple Line keeps its original midpoint
- * fixed while preserving the old axis-locked stretch behavior. The pointer is
- * projected onto the Line's original supporting direction; the dragged endpoint
- * follows that projected position and the opposite end is reflected through the
- * fixed midpoint.
+ * Option-dragging a Line/Arrow endpoint preserves the original behavior: the
+ * opposite endpoint stays fixed and the dragged endpoint is constrained to the
+ * Line's current supporting direction.
  */
-function moveLineEndpointAroundCenter(
-  e: DiagramElement,
-  index: number,
-  target: Point,
-): DiagramElement | null {
-  if (e.type !== "line") return null;
-  const vertices = lineVertices(e);
-  if (vertices.length !== 2) return null;
-
-  const start = worldPoint(vertices[0], e),
-    end = worldPoint(vertices[1], e),
-    midpoint = {
-      x: (start.x + end.x) / 2,
-      y: (start.y + end.y) / 2,
-    },
-    projectedTarget = projectEndpointToOriginalAxis(e, index, target),
-    opposite = {
-      x: 2 * midpoint.x - projectedTarget.x,
-      y: 2 * midpoint.y - projectedTarget.y,
-    };
-
-  const moved = baseMoveLineEndpoint(e, index, projectedTarget);
-  return baseMoveLineEndpoint(moved, index ? 0 : 1, opposite);
-}
-
 export function moveLineEndpoint(
   e: DiagramElement,
   index: number,
   target: Point,
 ): DiagramElement {
-  if (!isAltModifierDown()) return baseMoveLineEndpoint(e, index, target);
-
-  const centered = moveLineEndpointAroundCenter(e, index, target);
-  if (centered) return centered;
-
-  // Preserve the previous Option behavior for arrows and multi-vertex lines.
   return baseMoveLineEndpoint(
     e,
     index,
-    projectEndpointToOriginalAxis(e, index, target),
+    isAltModifierDown()
+      ? projectEndpointToOriginalAxis(e, index, target)
+      : target,
   );
 }
 
