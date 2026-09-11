@@ -90,25 +90,70 @@ function projectPointToLine(point: Point, a: Point, b: Point): Point | null {
 }
 
 function previewFrame(preview: PerpendicularPreview) {
-  const dx = preview.end.x - preview.start.x,
-    dy = preview.end.y - preview.start.y,
+  const dx = preview.foot.x - preview.start.x,
+    dy = preview.foot.y - preview.start.y,
     length = Math.hypot(dx, dy);
   if (length < 1e-8) return null;
   const x = { x: dx / length, y: dy / length };
-  return { x, y: { x: -x.y, y: x.x } };
+  return { x, y: { x: -x.y, y: x.x }, length };
 }
 
-/** Keep the selected target alive while moving along it or into a quick-pick corner. */
+/**
+ * Extend PH past the perpendicular foot according to the pointer. The foot H
+ * remains fixed and is always contained in the resulting segment. Entering the
+ * marker quick-pick ring preserves the previous length so choosing a corner
+ * does not collapse an already-extended line.
+ */
+export function perpendicularLineForPointer(
+  pointer: Point,
+  preview: PerpendicularPreview,
+  previousEnd: Point | null = null,
+  zoom = 1,
+): PerpendicularPreview {
+  const frame = previewFrame(preview);
+  if (!frame) return preview;
+  const scale = Math.max(zoom, 1e-6),
+    fromFoot = Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y);
+  if (previousEnd && fromFoot <= 30 / scale)
+    return { ...preview, end: previousEnd };
+
+  const offset = {
+      x: pointer.x - preview.start.x,
+      y: pointer.y - preview.start.y,
+    },
+    along = offset.x * frame.x.x + offset.y * frame.x.y,
+    length = Math.max(frame.length, along);
+  return {
+    ...preview,
+    end: {
+      x: preview.start.x + frame.x.x * length,
+      y: preview.start.y + frame.x.y * length,
+    },
+  };
+}
+
+/** Keep the selected target alive while choosing a length or marker around H. */
 export function perpendicularRetainsTargetAt(
   pointer: Point,
   preview: PerpendicularPreview,
   zoom = 1,
 ) {
-  const scale = Math.max(zoom, 1e-6);
-  return (
+  const scale = Math.max(zoom, 1e-6),
+    frame = previewFrame(preview);
+  if (
     lineDistance(pointer, preview.target.a, preview.target.b) <= 10 / scale ||
     Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <= 30 / scale
-  );
+  )
+    return true;
+  if (!frame) return false;
+
+  const offset = {
+      x: pointer.x - preview.start.x,
+      y: pointer.y - preview.start.y,
+    },
+    along = offset.x * frame.x.x + offset.y * frame.x.y,
+    lateral = Math.abs(offset.x * frame.y.x + offset.y * frame.y.y);
+  return along >= frame.length - 18 / scale && lateral <= 14 / scale;
 }
 
 /** Return the right-angle marker represented by the pointer's quadrant around H. */
