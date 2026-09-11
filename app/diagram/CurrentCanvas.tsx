@@ -24,6 +24,8 @@ import {
   type SnapTarget,
 } from "./snapping";
 import { makeElement } from "./currentDocument";
+import { deriveLineThroughPoints } from "./constructionInteraction";
+import { remapConstruction } from "./constructionTypes";
 import { createId } from "./defaultDocument";
 import {
   absolutePoints,
@@ -33,6 +35,7 @@ import {
   drawElement,
   elementShapeId,
   elementTransform,
+  isPointElement,
   isCurve,
   lineSegmentPoint,
   lineVertices,
@@ -73,6 +76,7 @@ type Gesture =
       start: Point;
       points: Point[];
       original: DiagramElement;
+      startPointId?: string;
     }
   | { kind: "tangent"; start: Point }
   | {
@@ -170,6 +174,7 @@ function optionDragCopies(source: DiagramElement[]) {
     groupId: e.groupId ? groups.get(e.groupId) : undefined,
     fromId: e.fromId ? idMap.get(e.fromId) : undefined,
     toId: e.toId ? idMap.get(e.toId) : undefined,
+    construction: remapConstruction(e.construction, idMap),
     intersectionWith: e.intersectionWith?.flatMap((id) =>
       idMap.has(id) ? [idMap.get(id)!] : [],
     ),
@@ -206,6 +211,14 @@ export function CurrentCanvas(p: Props) {
     () => d.elements.map((e) => resolveElement(e, d)),
     [d.elements],
   );
+  const pointIdForSnap = (target: SnapTarget | null) =>
+    target?.kind === "point"
+      ? target.ids.find((id) =>
+          elements.some(
+            (element) => element.id === id && isPointElement(element),
+          ),
+        )
+      : undefined;
   const selected = elements.filter((e) => selectedIds.includes(e.id));
   const intersections = useMemo(
     () => collectIntersections(elements),
@@ -517,7 +530,8 @@ export function CurrentCanvas(p: Props) {
       }
       return;
     }
-    const start = snap(q, []);
+    const start = snap(q, []),
+      startPointId = pointIdForSnap(snappedTarget.current);
     const e = makeElement(tool, start.x, start.y, 1, 1);
     if (TEXT_TYPES.has(e.type)) {
       p.onBegin();
@@ -534,6 +548,7 @@ export function CurrentCanvas(p: Props) {
       start,
       points: [start],
       original: e,
+      startPointId,
     });
     p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, e] }));
     p.onSelect([e.id]);
@@ -911,6 +926,26 @@ export function CurrentCanvas(p: Props) {
             y: g.start.y + (LINE_TYPES.has(g.original.type) ? 0 : 70),
           }),
         );
+      if (
+        g.kind === "draw" &&
+        ["line", "arrow"].includes(g.original.type) &&
+        g.startPointId
+      ) {
+        const end = snap(q, [g.id]),
+          endPointId = pointIdForSnap(snappedTarget.current),
+          startPoint = elements.find((e) => e.id === g.startPointId),
+          endPoint = elements.find((e) => e.id === endPointId);
+        if (startPoint && endPoint) {
+          const drawn = drawElement(
+              g.original,
+              g.start,
+              end,
+              event.shiftKey,
+            ),
+            dependent = deriveLineThroughPoints(drawn, startPoint, endPoint);
+          if (dependent) replaceElement(dependent);
+        }
+      }
       if (g.kind === "endpoint") {
         const end = snap(q, [g.original.id]);
         const target = targetNode(q, [

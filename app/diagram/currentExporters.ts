@@ -8,6 +8,7 @@ import {
 } from "./sceneGeometry";
 import { parseColor } from "./colorModel";
 import { collectIntersections, intersectionAppearance } from "./intersections";
+import { isConstructionSpec } from "./constructionTypes";
 
 export interface ImageOptions {
   format: "png" | "jpeg" | "svg";
@@ -190,6 +191,8 @@ export function validDocument(value: unknown): value is DiagramDocument {
     )
       return false;
     ids.add(e.id);
+    if (e.construction !== undefined && !isConstructionSpec(e.construction))
+      return false;
     for (const key of [
       "fontSize",
       "skewX",

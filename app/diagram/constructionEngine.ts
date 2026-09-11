@@ -10,8 +10,10 @@ import type { DiagramDocument, DiagramElement } from "./types";
 import { resolveElementFromLookup } from "./sceneGeometry";
 import {
   evaluateIntersectionConstruction,
+  evaluateLineThroughPointsConstruction,
   evaluatePointConstraint,
   evaluateTangentConstruction,
+  evaluateTangentPointConstruction,
   type ConstructionGeometryResult,
 } from "./constructionGeometry";
 
@@ -62,6 +64,19 @@ const EVALUATORS: Record<ConstructionSpec["kind"], Evaluator> = {
           spec.selector,
           spec.extent,
         )
+      : { ok: false, reason: "unsupported" },
+  "tangent-point": (element, spec, parents) =>
+    spec.kind === "tangent-point"
+      ? evaluateTangentPointConstruction(
+          element,
+          parents[0],
+          parents[1],
+          spec.selector,
+        )
+      : { ok: false, reason: "unsupported" },
+  "line-through-points": (element, spec, parents) =>
+    spec.kind === "line-through-points"
+      ? evaluateLineThroughPointsConstruction(element, parents[0], parents[1])
       : { ok: false, reason: "unsupported" },
 };
 

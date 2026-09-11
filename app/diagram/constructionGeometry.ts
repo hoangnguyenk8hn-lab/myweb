@@ -168,6 +168,10 @@ function selectTangentBranch(
   selector: ConstructionBranchSelector,
 ): TangentCandidate | null {
   if (!candidates.length) return null;
+  // Tangent solvers return branches in a deterministic geometric order.
+  // Prefer that stored identity so two contact points do not swap simply
+  // because the source moved closer to the other branch's old seed.
+  if (selector.branch < candidates.length) return candidates[selector.branch];
   if (selector.seed)
     return candidates.reduce((best, current) =>
       distance(current.contact, selector.seed!) <
@@ -176,6 +180,78 @@ function selectTangentBranch(
         : best,
     );
   return candidates[Math.max(0, selector.branch) % candidates.length];
+}
+
+export function evaluateLineThroughPointsConstruction(
+  element: DiagramElement,
+  a: DiagramElement,
+  b: DiagramElement,
+): ConstructionGeometryResult {
+  if (!["line", "arrow"].includes(element.type))
+    return {
+      ok: false,
+      reason: "unsupported",
+      detail: "line-through-points requires a Line or Arrow element",
+    };
+  const start = pointCoordinate(a),
+    end = pointCoordinate(b);
+  if (!start || !end)
+    return {
+      ok: false,
+      reason: "unsupported",
+      detail: "line-through-points parents must both be Point elements",
+    };
+  if (distance(start, end) < 1e-8)
+    return { ok: false, reason: "no-solution", detail: "Points coincide" };
+  return {
+    ok: true,
+    element: {
+      ...element,
+      x: start.x,
+      y: start.y,
+      width: end.x - start.x,
+      height: end.y - start.y,
+      points: undefined,
+      control1: undefined,
+      control2: undefined,
+    },
+  };
+}
+
+export function evaluateTangentPointConstruction(
+  element: DiagramElement,
+  source: DiagramElement,
+  target: DiagramElement,
+  selector: ConstructionBranchSelector,
+): ConstructionGeometryResult {
+  if (!isPointElement(element))
+    return {
+      ok: false,
+      reason: "unsupported",
+      detail: "tangent-point requires a Point element",
+    };
+  const sourcePoint = pointCoordinate(source);
+  if (!sourcePoint)
+    return {
+      ok: false,
+      reason: "unsupported",
+      detail: "tangent-point source must be a Point element",
+    };
+  const candidate = selectTangentBranch(
+    tangentCandidates(sourcePoint, target),
+    selector,
+  );
+  if (!candidate) return { ok: false, reason: "no-solution" };
+  return {
+    ok: true,
+    element: {
+      ...element,
+      x: candidate.contact.x,
+      y: candidate.contact.y,
+      width: 0,
+      height: 0,
+    },
+  };
 }
 
 export function evaluatePointConstraint(

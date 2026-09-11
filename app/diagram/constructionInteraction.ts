@@ -5,7 +5,9 @@ import type {
 } from "./constructionTypes";
 import {
   evaluateIntersectionConstruction,
+  evaluateLineThroughPointsConstruction,
   evaluateTangentConstruction,
+  evaluateTangentPointConstruction,
   projectPointConstraint,
 } from "./constructionGeometry";
 import { contourIntersections } from "./intersections";
@@ -124,6 +126,66 @@ export function deriveTangentLine(
       target,
       selector,
       construction.extent,
+    );
+  return evaluated.ok ? evaluated.element : null;
+}
+
+/** Materialize a reusable tangent contact as a Derived Point. */
+export function deriveTangentPoint(
+  pointElement: DiagramElement,
+  sourcePoint: DiagramElement,
+  target: DiagramElement,
+  near: Point,
+): DiagramElement | null {
+  const candidates = tangentCandidates(
+    { x: sourcePoint.x, y: sourcePoint.y },
+    target,
+  );
+  if (!candidates.length) return null;
+  let branch = 0;
+  for (let i = 1; i < candidates.length; i++)
+    if (
+      distance(candidates[i].contact, near) <
+      distance(candidates[branch].contact, near)
+    )
+      branch = i;
+  const selector: ConstructionBranchSelector = {
+      branch,
+      seed: candidates[branch].contact,
+    },
+    construction = {
+      mode: "derived" as const,
+      kind: "tangent-point" as const,
+      parents: [sourcePoint.id, target.id] as [string, string],
+      selector,
+    },
+    staged = { ...pointElement, construction },
+    evaluated = evaluateTangentPointConstruction(
+      staged,
+      sourcePoint,
+      target,
+      selector,
+    );
+  return evaluated.ok ? evaluated.element : null;
+}
+
+/** Turn a drawn Line/Arrow into a reusable dependency on two Point objects. */
+export function deriveLineThroughPoints(
+  lineElement: DiagramElement,
+  startPoint: DiagramElement,
+  endPoint: DiagramElement,
+): DiagramElement | null {
+  if (startPoint.id === endPoint.id) return null;
+  const construction = {
+      mode: "derived" as const,
+      kind: "line-through-points" as const,
+      parents: [startPoint.id, endPoint.id] as [string, string],
+    },
+    staged = { ...lineElement, construction },
+    evaluated = evaluateLineThroughPointsConstruction(
+      staged,
+      startPoint,
+      endPoint,
     );
   return evaluated.ok ? evaluated.element : null;
 }

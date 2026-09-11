@@ -5,6 +5,7 @@ import {
   constrainPointToObject,
   deriveIntersectionPoint,
   deriveTangentLine,
+  deriveTangentPoint,
   updatePointConstraintFromPointer,
 } from "./constructionInteraction";
 import { makeElement } from "./currentDocument";
@@ -181,12 +182,25 @@ export function runConstructionCommand(
       ),
     )
     .filter((element): element is DiagramElement => !!element);
-  if (!tangents.length)
+  const contacts = candidates
+    .map((candidate) =>
+      deriveTangentPoint(
+        makeElement("point", candidate.contact.x, candidate.contact.y, 0, 0),
+        point,
+        target,
+        candidate.contact,
+      ),
+    )
+    .filter((element): element is DiagramElement => !!element);
+  if (!tangents.length || contacts.length !== tangents.length)
     return fail(source, "Không thể tạo tiếp tuyến phụ thuộc.");
   return {
-    document: { ...source, elements: [...source.elements, ...tangents] },
-    createdIds: tangents.map((element) => element.id),
-    message: `Đã tạo ${tangents.length} tiếp tuyến phụ thuộc.`,
+    document: {
+      ...source,
+      elements: [...source.elements, ...contacts, ...tangents],
+    },
+    createdIds: [...contacts, ...tangents].map((element) => element.id),
+    message: `Đã tạo ${contacts.length} tiếp điểm và ${tangents.length} tiếp tuyến phụ thuộc.`,
   };
 }
 

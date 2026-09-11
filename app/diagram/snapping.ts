@@ -128,6 +128,15 @@ export function nearestSnapTarget(
 ): SnapTarget | null {
   let closest: SnapTarget | null = null,
     best = Infinity;
+  const priority: Record<SnapTarget["kind"], number> = {
+    point: 0,
+    intersection: 1,
+    endpoint: 2,
+    vertex: 3,
+    midpoint: 4,
+    center: 5,
+    quadrant: 6,
+  };
   for (const target of targets) {
     if (
       target.ids.some(
@@ -145,7 +154,8 @@ export function nearestSnapTarget(
     if (
       distance <= radius &&
       (distance < best - 1e-8 ||
-        (Math.abs(distance - best) < 1e-8 && target.kind === "intersection"))
+        (Math.abs(distance - best) < 1e-8 &&
+          (!closest || priority[target.kind] < priority[closest.kind])))
     ) {
       closest = target;
       best = distance;

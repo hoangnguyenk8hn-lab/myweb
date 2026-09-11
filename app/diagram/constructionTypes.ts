@@ -61,10 +61,28 @@ export type TangentConstruction = {
   extent?: "segment" | "line";
 };
 
+/** One reusable contact point produced by a tangent construction. */
+export type TangentPointConstruction = {
+  mode: "derived";
+  kind: "tangent-point";
+  /** parents[0] is the source Point; parents[1] is the target curve. */
+  parents: [string, string];
+  selector: ConstructionBranchSelector;
+};
+
+/** A straight element whose two endpoints are persistent Point objects. */
+export type LineThroughPointsConstruction = {
+  mode: "derived";
+  kind: "line-through-points";
+  parents: [string, string];
+};
+
 export type ConstructionSpec =
   | PointOnObjectConstruction
   | IntersectionConstruction
-  | TangentConstruction;
+  | TangentConstruction
+  | TangentPointConstruction
+  | LineThroughPointsConstruction;
 
 export type ConstructionKind = ConstructionSpec["kind"];
 
@@ -142,8 +160,17 @@ export function isConstructionSpec(value: unknown): value is ConstructionSpec {
       spec.mode === "derived" &&
       parents(spec.parents, 2) &&
       selector(spec.selector) &&
-      (spec.extent === undefined || ["segment", "line"].includes(spec.extent as string))
+      (spec.extent === undefined ||
+        ["segment", "line"].includes(spec.extent as string))
     );
+  if (spec.kind === "tangent-point")
+    return (
+      spec.mode === "derived" &&
+      parents(spec.parents, 2) &&
+      selector(spec.selector)
+    );
+  if (spec.kind === "line-through-points")
+    return spec.mode === "derived" && parents(spec.parents, 2);
   return false;
 }
 

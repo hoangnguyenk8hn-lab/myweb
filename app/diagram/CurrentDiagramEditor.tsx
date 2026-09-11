@@ -965,7 +965,9 @@ export function CurrentDiagramEditor() {
                   {tool !== "select" && tool !== "hand"
                     ? tool === "polyline" || tool === "polycurve"
                       ? "Click points · double-click to finish · Enter / Esc to select"
-                      : "Click and drag to draw · Enter / Esc to select"
+                      : tool === "line" || tool === "arrow"
+                        ? "Drag point to point to keep endpoints dynamic · Enter / Esc to select"
+                        : "Click and drag to draw · Enter / Esc to select"
                     : ""}
                 </span>
                 {selected.length === 1 && (

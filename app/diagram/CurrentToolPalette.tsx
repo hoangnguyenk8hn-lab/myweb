@@ -195,7 +195,7 @@ export function CurrentToolPalette({
     {
       tool: "tangent",
       label: "Tangent",
-      hint: "Click a point and a circle or ellipse",
+      hint: "Creates reusable contact points and tangent lines",
     },
   ];
   return (

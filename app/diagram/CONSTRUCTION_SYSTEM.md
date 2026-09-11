@@ -36,6 +36,20 @@ Current initial construction kinds:
 - `point-on-object`
 - `intersection`
 - `tangent`
+- `tangent-point`
+- `line-through-points`
+
+## Reusable construction outputs
+
+Multi-result tools materialize every geometrically meaningful result as an
+element in the document. The Tangent tool therefore creates both tangent lines
+and their contact Points. A contact Point can be selected, snapped to, and used
+as a parent by later constructions.
+
+Drawing a Line or Arrow from one persistent Point to another creates a
+`line-through-points` relation automatically. This makes chains such as
+`Point on Line -> tangent contacts A/B -> Line AB` resolve in dependency order
+without any tool-specific propagation code.
 
 Future kinds should follow the same evaluator contract (`midpoint`, `projection`, `perpendicular`, `parallel`, `angle-bisector`, circumcenter, etc.).
 
