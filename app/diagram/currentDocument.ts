@@ -39,6 +39,7 @@ export function makeElement(
     : tool === "select" ||
         tool === "hand" ||
         tool === "tangent" ||
+        tool === "perpendicular" ||
         tool === "point-reflection"
       ? "rectangle"
       : (tool as DiagramElement["type"]);
