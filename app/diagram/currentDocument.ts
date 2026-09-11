@@ -36,7 +36,10 @@ export function makeElement(
         : undefined;
   const type = shape
     ? "shape"
-    : tool === "select" || tool === "hand" || tool === "tangent"
+    : tool === "select" ||
+        tool === "hand" ||
+        tool === "tangent" ||
+        tool === "point-reflection"
       ? "rectangle"
       : (tool as DiagramElement["type"]);
   const text = ["text", "plain-text", "boxed-text"].includes(type);
