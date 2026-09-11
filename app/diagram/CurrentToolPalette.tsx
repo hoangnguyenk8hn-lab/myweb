@@ -43,6 +43,10 @@ const CONSTRUCTION_OVERLAY_CSS = `
   .drawing-main > [role="status"][aria-live="polite"] > button:hover {
     background: #f2f5f8;
   }
+  [aria-label="Dynamic geometry tools"] button > span:first-child > svg {
+    width: 100%;
+    height: 100%;
+  }
 `;
 
 const ShapeButton = ({
