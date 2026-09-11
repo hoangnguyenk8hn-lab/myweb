@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CurrentToolPalette } from "./CurrentToolPalette";
+import {
+  CurrentToolPalette,
+  type GuidedConstructionTool,
+} from "./CurrentToolPalette";
 import { CurrentCanvas } from "./CurrentCanvas";
 import { EditorToolbar } from "./EditorToolbar";
 import { Dropdown, NumberControl } from "./EditorControls";
@@ -89,11 +92,73 @@ function ZoomIcon({ minus = false }: { minus?: boolean }) {
     </svg>
   );
 }
+
+const CONSTRUCTION_LABELS: Record<GuidedConstructionTool, string> = {
+  "point-on-line": "Point on Line",
+  "point-on-circle": "Point on Circle",
+  intersection: "Intersection",
+  tangent: "Tangent",
+};
+const isPointElement = (element: DiagramElement) =>
+  element.type === "point" || element.shape === "point";
+const isCircleElement = (element: DiagramElement) =>
+  element.type === "circle" ||
+  element.type === "ellipse" ||
+  element.shape === "circle" ||
+  element.shape === "ellipse";
+const isLineElement = (element: DiagramElement) =>
+  ["line", "arrow", "curve", "curved-arrow", "polyline", "polycurve"].includes(
+    element.type,
+  );
+function constructionCandidate(
+  command: GuidedConstructionTool,
+  element: DiagramElement,
+) {
+  if (command === "intersection") return !isPointElement(element);
+  if (command === "point-on-line")
+    return isPointElement(element) || isLineElement(element);
+  return isPointElement(element) || isCircleElement(element);
+}
+function constructionPair(
+  command: GuidedConstructionTool,
+  first: DiagramElement,
+  second: DiagramElement,
+) {
+  if (first.id === second.id) return false;
+  if (command === "intersection")
+    return !isPointElement(first) && !isPointElement(second);
+  if (command === "point-on-line")
+    return (
+      (isPointElement(first) && isLineElement(second)) ||
+      (isLineElement(first) && isPointElement(second))
+    );
+  return (
+    (isPointElement(first) && isCircleElement(second)) ||
+    (isCircleElement(first) && isPointElement(second))
+  );
+}
+function constructionPrompt(
+  command: GuidedConstructionTool,
+  first?: DiagramElement,
+) {
+  if (!first) {
+    if (command === "intersection") return "Click the first object";
+    if (command === "point-on-line") return "Click a point or a line / curve";
+    return "Click a point or a circle / ellipse";
+  }
+  if (command === "intersection") return "Click the second object";
+  if (command === "point-on-line")
+    return isPointElement(first) ? "Click a line or curve" : "Click a point";
+  return isPointElement(first) ? "Click a circle or ellipse" : "Click a point";
+}
+
 export function CurrentDiagramEditor() {
   const initial = useMemo(blankDocument, []),
     history = useCurrentHistory(initial),
     d = history.document;
   const [tool, setTool] = useState<DiagramTool>("select"),
+    [constructionTool, setConstructionTool] =
+      useState<GuidedConstructionTool | null>(null),
     [selectedIds, setSelectedIds] = useState<string[]>([]),
     [zoom, setZoom] = useState(1),
     [guides, setGuides] = useState(false),
@@ -199,7 +264,6 @@ export function CurrentDiagramEditor() {
       fittedZoom(viewport.clientWidth, viewport.clientHeight, d.width, d.height),
     );
   };
-  const select = (ids: string[]) => setSelectedIds(ids);
   const canvasTool = (next: DiagramTool) => {
     if (next !== "select" || tool === "select") setTool(next);
   };
@@ -232,19 +296,72 @@ export function CurrentDiagramEditor() {
           : e,
       ),
     }));
-  const runConstruction = (command: ConstructionCommand) => {
+  const executeConstruction = (
+    command: ConstructionCommand,
+    ids: string[] = selectedIds,
+  ) => {
     const result = runConstructionCommand(
       history.sourceDocument,
       d,
-      selectedIds,
+      ids,
       command,
     );
     if (!result.error) {
       history.commit(result.document);
       setSelectedIds(result.createdIds);
       setTool("select");
+      if (command !== "detach") setConstructionTool(null);
+    } else if (command !== "detach" && constructionTool === command) {
+      setSelectedIds([]);
     }
     report(result.message);
+    return !result.error;
+  };
+  const select = (ids: string[]) => {
+    if (!constructionTool) {
+      setSelectedIds(ids);
+      return;
+    }
+    if (!ids.length) {
+      setSelectedIds([]);
+      return;
+    }
+    const clickedId =
+      ids.find((id) => !selectedIds.includes(id)) ?? ids[ids.length - 1];
+    const clicked = d.elements.find((element) => element.id === clickedId);
+    if (!clicked) return;
+    const first = d.elements.find((element) => element.id === selectedIds[0]);
+    if (!first) {
+      if (!constructionCandidate(constructionTool, clicked)) {
+        report(constructionPrompt(constructionTool));
+        return;
+      }
+      setSelectedIds([clicked.id]);
+      return;
+    }
+    if (clicked.id === first.id) return;
+    if (!constructionPair(constructionTool, first, clicked)) {
+      report(constructionPrompt(constructionTool, first));
+      return;
+    }
+    const pair = [first.id, clicked.id];
+    setSelectedIds(pair);
+    executeConstruction(constructionTool, pair);
+  };
+  const startConstruction = (next: GuidedConstructionTool) => {
+    if (constructionTool === next) {
+      setConstructionTool(null);
+      setSelectedIds([]);
+      return;
+    }
+    if (editId) {
+      history.endGesture();
+      setEditId(null);
+    }
+    setTool("select");
+    setSelectedIds([]);
+    setConstructionTool(next);
+    report(`${CONSTRUCTION_LABELS[next]}: ${constructionPrompt(next)}.`);
   };
   const remove = () => {
     const ids = d.elements
@@ -267,6 +384,7 @@ export function CurrentDiagramEditor() {
     toolbarGesture.current = false;
     setEditId(null);
     setTool("select");
+    setConstructionTool(null);
     setSelectedIds([]);
   };
   const addCopies = (source: DiagramElement[]) => {
@@ -386,10 +504,12 @@ export function CurrentDiagramEditor() {
     }
     switch (command) {
       case "undo":
+        setConstructionTool(null);
         setTool("select");
         history.undo();
         break;
       case "redo":
+        setConstructionTool(null);
         setTool("select");
         history.redo();
         break;
@@ -421,17 +541,20 @@ export function CurrentDiagramEditor() {
         arrange(command);
         break;
       case "select-all":
+        setConstructionTool(null);
         setSelectedIds(d.elements.map((e) => e.id));
         setTool("select");
         break;
       case "new":
         history.commit(blankDocument());
+        setConstructionTool(null);
         setSelectedIds([]);
         setTool("select");
         setEditId(null);
         break;
       case "demo":
         history.commit(exampleDocument());
+        setConstructionTool(null);
         setSelectedIds([]);
         setTool("select");
         break;
@@ -557,10 +680,15 @@ export function CurrentDiagramEditor() {
         remove();
       } else if (event.key === "Escape") {
         history.cancelGesture();
+        setConstructionTool(null);
         setTool("select");
         setSelectedIds([]);
-      } else if (event.key === "Enter" && tool !== "select") {
+      } else if (
+        event.key === "Enter" &&
+        (tool !== "select" || constructionTool)
+      ) {
         event.preventDefault();
+        setConstructionTool(null);
         setTool("select");
         setSelectedIds([]);
       } else if (event.key.startsWith("Arrow") && selected.length) {
@@ -587,7 +715,10 @@ export function CurrentDiagramEditor() {
           o: "shape:circle",
           p: "freehand",
         };
-        if (shortcuts[key]) setTool(shortcuts[key]);
+        if (shortcuts[key]) {
+          setConstructionTool(null);
+          setTool(shortcuts[key]);
+        }
       }
     };
     const paste = (event: ClipboardEvent) => {
@@ -635,6 +766,10 @@ export function CurrentDiagramEditor() {
       report("Browser storage is full. Save JSON to keep a copy.");
     }
   };
+  const constructionFirst = constructionTool
+    ? d.elements.find((element) => element.id === selectedIds[0])
+    : undefined;
+  const hasConstructionSelection = selected.some((element) => element.construction);
   return (
     <main className={`drawing-app ${closed ? "drawing-closed" : ""}`}>
       {closed ? (
@@ -651,11 +786,14 @@ export function CurrentDiagramEditor() {
           <div className="drawing-workarea">
             <CurrentToolPalette
               activeTool={tool}
+              activeConstruction={constructionTool}
+              onConstructionSelect={startConstruction}
               onSelect={(next) => {
                 if (editId) {
                   history.endGesture();
                   setEditId(null);
                 }
+                setConstructionTool(null);
                 setTool(next);
                 setSelectedIds([]);
               }}
@@ -688,6 +826,40 @@ export function CurrentDiagramEditor() {
                 }}
                 onCommand={run}
               />
+              {constructionTool && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    minHeight: 36,
+                    padding: "5px 10px",
+                    borderBottom: "1px solid #d9e4f2",
+                    background: "#f6f9fe",
+                    color: "#26364a",
+                    fontSize: 12,
+                  }}
+                >
+                  <strong style={{ whiteSpace: "nowrap" }}>
+                    {CONSTRUCTION_LABELS[constructionTool]}
+                  </strong>
+                  <span style={{ flex: 1 }}>
+                    {selectedIds.length ? "Step 2 of 2" : "Step 1 of 2"} ·{" "}
+                    {constructionPrompt(constructionTool, constructionFirst)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setConstructionTool(null);
+                      setSelectedIds([]);
+                    }}
+                    title="Cancel construction"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
               <CurrentCanvas
                 document={d}
                 tool={tool}
@@ -767,50 +939,28 @@ export function CurrentDiagramEditor() {
                     Zoom: {Math.round(zoom * 100)}%
                   </span>
                 </Dropdown>
-                <div
-                  aria-label="Dynamic Geometry"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 4,
-                    marginLeft: 8,
-                  }}
-                >
-                  <strong style={{ fontSize: 11, whiteSpace: "nowrap" }}>
-                    Dynamic Geometry
-                  </strong>
-                  <button
-                    title="Chọn Point và Line/Curve"
-                    onClick={() => runConstruction("point-on-line")}
+                {hasConstructionSelection && !constructionTool && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginLeft: 8,
+                      paddingLeft: 8,
+                      borderLeft: "1px solid #d5d5d5",
+                    }}
                   >
-                    Point on Line
-                  </button>
-                  <button
-                    title="Chọn Point và Circle/Ellipse"
-                    onClick={() => runConstruction("point-on-circle")}
-                  >
-                    Point on Circle
-                  </button>
-                  <button
-                    title="Chọn đúng hai đối tượng"
-                    onClick={() => runConstruction("intersection")}
-                  >
-                    Intersection
-                  </button>
-                  <button
-                    title="Chọn Point và Circle/Ellipse"
-                    onClick={() => runConstruction("tangent")}
-                  >
-                    Tangent
-                  </button>
-                  <button
-                    title="Biến đối tượng phụ thuộc thành đối tượng tự do"
-                    onClick={() => runConstruction("detach")}
-                  >
-                    Detach
-                  </button>
-                </div>
+                    <span style={{ fontSize: 11, color: "#53657a" }}>
+                      Dynamic
+                    </span>
+                    <button
+                      title="Make the selected dependent object free"
+                      onClick={() => executeConstruction("detach")}
+                    >
+                      Detach
+                    </button>
+                  </div>
+                )}
                 <span className="drawing-hint">
                   {tool !== "select" && tool !== "hand"
                     ? tool === "polyline" || tool === "polycurve"
@@ -917,6 +1067,7 @@ export function CurrentDiagramEditor() {
             if (!validDocument(parsed))
               throw new Error("This file is not a supported drawing JSON.");
             history.commit(parsed);
+            setConstructionTool(null);
             setSelectedIds([]);
             setTool("select");
             setZoom(1);
@@ -976,6 +1127,7 @@ export function CurrentDiagramEditor() {
               setSelectedIds([e.id]);
               setPlot({ id: e.id, settings });
             }
+            setConstructionTool(null);
             setTool("select");
           }}
         />

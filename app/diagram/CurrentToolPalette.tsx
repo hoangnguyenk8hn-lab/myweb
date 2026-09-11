@@ -7,7 +7,10 @@ import {
   type ShapeDefinition,
 } from "./shapes";
 import { ToolIcon } from "./catalog";
+import type { ConstructionCommand } from "./constructionCommands";
 import type { DiagramTool, PlotSettings } from "./types";
+
+export type GuidedConstructionTool = Exclude<ConstructionCommand, "detach">;
 
 const ShapeButton = ({
   shape,
@@ -40,19 +43,57 @@ const ShapeButton = ({
   </button>
 );
 
+function ConstructionIcon({ tool }: { tool: GuidedConstructionTool }) {
+  if (tool === "point-on-line")
+    return (
+      <svg viewBox="0 0 42 34" aria-hidden="true">
+        <path d="M5 27L37 7" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <circle cx="23" cy="16" r="3.2" fill="currentColor" />
+      </svg>
+    );
+  if (tool === "point-on-circle")
+    return (
+      <svg viewBox="0 0 42 34" aria-hidden="true">
+        <circle cx="21" cy="17" r="11" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="30.5" cy="11.5" r="3.2" fill="currentColor" />
+      </svg>
+    );
+  if (tool === "intersection")
+    return (
+      <svg viewBox="0 0 42 34" aria-hidden="true">
+        <circle cx="16" cy="17" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="26" cy="17" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="21" cy="8.4" r="2.5" fill="currentColor" />
+        <circle cx="21" cy="25.6" r="2.5" fill="currentColor" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 42 34" aria-hidden="true">
+      <circle cx="28" cy="17" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="6" cy="27" r="2.4" fill="currentColor" />
+      <path d="M6 27L22.8 9.7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 export function CurrentToolPalette({
   activeTool,
+  activeConstruction,
   onSelect,
+  onConstructionSelect,
   onImage,
   onPlot,
 }: {
   activeTool: DiagramTool;
+  activeConstruction: GuidedConstructionTool | null;
   onSelect: (tool: DiagramTool) => void;
+  onConstructionSelect: (tool: GuidedConstructionTool) => void;
   onImage: () => void;
   onPlot: (kind: PlotSettings["kind"]) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     general: true,
+    construct: true,
     lines: true,
     document: true,
   });
@@ -84,16 +125,42 @@ export function CurrentToolPalette({
     content?: React.ReactNode,
   ) => (
     <button
-      className={`shape-button${activeTool === tool ? " active" : ""}`}
+      className={`shape-button${activeTool === tool && !activeConstruction ? " active" : ""}`}
       key={tool}
       title={label}
       aria-label={label}
-      aria-pressed={activeTool === tool}
+      aria-pressed={activeTool === tool && !activeConstruction}
       onClick={() => onSelect(tool)}
     >
       {content ?? <ToolIcon tool={tool} size={22} />}
     </button>
   );
+  const constructions: Array<{
+    tool: GuidedConstructionTool;
+    label: string;
+    hint: string;
+  }> = [
+    {
+      tool: "point-on-line",
+      label: "Point on Line",
+      hint: "Click a point and a line or curve",
+    },
+    {
+      tool: "point-on-circle",
+      label: "Point on Circle",
+      hint: "Click a point and a circle or ellipse",
+    },
+    {
+      tool: "intersection",
+      label: "Intersection",
+      hint: "Click two objects",
+    },
+    {
+      tool: "tangent",
+      label: "Tangent",
+      hint: "Click a point and a circle or ellipse",
+    },
+  ];
   return (
     <aside className="shape-sidebar" aria-label="Drawing tools">
       {header("general", "General")}
@@ -120,20 +187,39 @@ export function CurrentToolPalette({
           )}
         </div>
       )}
+      {header("construct", "Construct")}
+      {open.construct && (
+        <div className="plot-tools" aria-label="Dynamic geometry tools">
+          {constructions.map(({ tool, label, hint }) => {
+            const active = activeConstruction === tool;
+            return (
+              <button
+                key={tool}
+                title={hint}
+                aria-label={label}
+                aria-pressed={active}
+                onClick={() => onConstructionSelect(tool)}
+                style={
+                  active
+                    ? {
+                        boxShadow: "inset 0 0 0 2px #4f8edc",
+                        background: "#eaf3ff",
+                      }
+                    : undefined
+                }
+              >
+                <ConstructionIcon tool={tool} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {header("lines", "Lines, Polygons")}
       {open.lines && (
         <div className="shape-grid line-tools">
           {basic("line", "Line")}
           {basic("curve", "Curve")}
-          {basic(
-            "tangent",
-            "Tangent from Point",
-            <svg viewBox="0 0 28 28" aria-hidden="true">
-              <circle cx="19" cy="14" r="7" />
-              <circle cx="5" cy="22" r="1.7" fill="currentColor" stroke="none" />
-              <path d="M5 22L14.5 8.6" />
-            </svg>,
-          )}
           {basic("arrow", "Arrow")}
           {basic("curved-arrow", "Curved Arrow")}
           {basic(
