@@ -45,6 +45,14 @@ function segmentDistance(point: Point, a: Point, b: Point) {
   return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
 }
 
+function lineDistance(point: Point, a: Point, b: Point) {
+  const dx = b.x - a.x,
+    dy = b.y - a.y,
+    length = Math.hypot(dx, dy);
+  if (length < 1e-8) return Infinity;
+  return Math.abs((point.x - a.x) * dy - (point.y - a.y) * dx) / length;
+}
+
 /** Return the nearest straight two-vertex Line under the pointer. */
 export function perpendicularTargetAt(
   pointer: Point,
@@ -90,15 +98,16 @@ function previewFrame(preview: PerpendicularPreview) {
   return { x, y: { x: -x.y, y: x.x } };
 }
 
-/** Keep the selected target alive while the pointer moves into a quick-pick corner. */
-export function perpendicularQuickPickContains(
+/** Keep the selected target alive while moving along it or into a quick-pick corner. */
+export function perpendicularRetainsTargetAt(
   pointer: Point,
   preview: PerpendicularPreview,
   zoom = 1,
 ) {
+  const scale = Math.max(zoom, 1e-6);
   return (
-    Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <=
-    30 / Math.max(zoom, 1e-6)
+    lineDistance(pointer, preview.target.a, preview.target.b) <= 10 / scale ||
+    Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <= 30 / scale
   );
 }
 
