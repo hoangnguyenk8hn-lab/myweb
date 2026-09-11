@@ -57,9 +57,24 @@ export function CurrentCanvas(p: Props) {
   const startRef = useRef<Point | null>(null),
     previewRef = useRef<PerpendicularPreview | null>(null),
     gestureRef = useRef(false),
-    commitPendingRef = useRef(false);
+    commitPendingRef = useRef(false),
+    handleDragRef = useRef(false),
+    disableGridSnapRef = useRef(false);
   const [quickStart, setQuickStart] = useState<Point | null>(null),
     [quickPreview, setQuickPreview] = useState<PerpendicularPreview | null>(null);
+
+  // CurrentCanvasCore reads grid.snap during pointer handling. A getter lets the
+  // capture layer suppress only grid snapping synchronously while Option/Alt is
+  // held on a selection handle, without changing the persisted document.
+  const coreDocument = useMemo(() => {
+    const grid = { ...p.document.grid };
+    Object.defineProperty(grid, "snap", {
+      enumerable: true,
+      configurable: true,
+      get: () => p.document.grid.snap && !disableGridSnapRef.current,
+    });
+    return { ...p.document, grid };
+  }, [p.document]);
 
   const elements = useMemo(
     () => p.document.elements.map((element) => resolveElement(element, p.document)),
@@ -85,6 +100,10 @@ export function CurrentCanvas(p: Props) {
 
   useEffect(() => {
     if (p.tool !== "perpendicular") clearQuickPick();
+    if (p.tool !== "select") {
+      handleDragRef.current = false;
+      disableGridSnapRef.current = false;
+    }
   }, [p.tool]);
 
   const eventPoint = (event: { clientX: number; clientY: number }): Point => {
@@ -177,11 +196,16 @@ export function CurrentCanvas(p: Props) {
   };
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as Element;
+    handleDragRef.current =
+      p.tool === "select" && !!target.closest(".selection-layer");
+    disableGridSnapRef.current = handleDragRef.current && event.altKey;
+
     if (
       p.tool !== "perpendicular" ||
       p.editId ||
       event.button !== 0 ||
-      (event.target as Element).closest(
+      target.closest(
         ".inline-text-editor,.canvas-context-menu,.context-dismiss",
       )
     )
@@ -196,11 +220,15 @@ export function CurrentCanvas(p: Props) {
   };
 
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (handleDragRef.current)
+      disableGridSnapRef.current = event.altKey;
     if (!gestureRef.current || p.tool !== "perpendicular") return;
     updateQuickPreview(constrain(eventPoint(event)));
   };
 
   const pointerUpCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (handleDragRef.current)
+      disableGridSnapRef.current = event.altKey;
     if (!gestureRef.current || p.tool !== "perpendicular") return;
     commitPendingRef.current = true;
     updateQuickPreview(constrain(eventPoint(event)));
@@ -245,7 +273,11 @@ export function CurrentCanvas(p: Props) {
     p.onCancel();
   };
 
-  const finishPointer = () => clearQuickPick();
+  const finishPointer = () => {
+    handleDragRef.current = false;
+    disableGridSnapRef.current = false;
+    clearQuickPick();
+  };
 
   const overlay =
     p.svgRef.current && quickStart
@@ -316,6 +348,7 @@ export function CurrentCanvas(p: Props) {
       <style>{`.current-canvas-quick-perpendicular.quick-pick-active [data-perpendicular-preview]{display:none}`}</style>
       <CurrentCanvasCore
         {...p}
+        document={coreDocument}
         onReplace={wrappedReplace}
         onCancel={wrappedCancel}
       />
