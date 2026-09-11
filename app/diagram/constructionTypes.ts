@@ -121,14 +121,14 @@ export function isConstructionSpec(value: unknown): value is ConstructionSpec {
     if (!locator || typeof locator !== "object") return false;
     const l = locator as Record<string, unknown>;
     if (l.kind === "segment")
-      return Number.isInteger(l.segment) &&
-        (l.segment as number) >= 0 &&
+      return finite(l.segment) &&
+        Number.isInteger(l.segment) &&
+        l.segment >= 0 &&
         finite(l.t) &&
-        (l.t as number) >= 0 &&
-        (l.t as number) <= 1;
+        l.t >= 0 &&
+        l.t <= 1;
     if (l.kind === "circle") return finite(l.angle);
-    if (l.kind === "path")
-      return finite(l.t) && (l.t as number) >= 0 && (l.t as number) <= 1;
+    if (l.kind === "path") return finite(l.t) && l.t >= 0 && l.t <= 1;
     return false;
   }
   if (spec.kind === "intersection")
