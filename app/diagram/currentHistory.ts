@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useReducer } from "react";
+import { useCallback, useMemo, useReducer } from "react";
+import { resolveConstructionDocument } from "./constructionEngine";
 import type { DiagramDocument } from "./types";
 
 type Update =
@@ -79,8 +80,14 @@ export function useCurrentHistory(initial: DiagramDocument) {
     future: [],
     gesture: null,
   });
+  const resolved = useMemo(() => resolveConstructionDocument(s.present), [s.present]);
   return {
-    document: s.present,
+    /** Geometry consumed by renderer, snapping, toolbar and export. */
+    document: resolved.document,
+    /** Persisted/source geometry used internally by history and construction edits. */
+    sourceDocument: s.present,
+    constructionStates: resolved.states,
+    constructionGraph: resolved.graph,
     canUndo: !!s.past.length,
     canRedo: !!s.future.length,
     inGesture: !!s.gesture,
