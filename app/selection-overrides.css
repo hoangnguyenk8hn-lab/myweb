@@ -29,6 +29,23 @@
   opacity: 0.5;
 }
 
+/* Match Point Reflection's preview language to Tangent: white/green source,
+ * solid active green construction and filled green result/target points. */
+.selection-layer [data-point-reflection-preview] > circle:first-child {
+  fill: #ffffff !important;
+  stroke: #348b57 !important;
+}
+
+.selection-layer [data-point-reflection-preview] > path {
+  stroke: #2f9e5b !important;
+  stroke-dasharray: none !important;
+}
+
+.selection-layer [data-point-reflection-preview] > circle:not(:first-child) {
+  fill: #2f9e5b !important;
+  stroke: #2f9e5b !important;
+}
+
 /* A construction/drawing tool owns the next pointer gesture. Keep the
  * selection chrome visible as feedback, but let pointer input pass through it
  * so a new Line/Curve/Tangent/etc. can start exactly on an existing handle or
