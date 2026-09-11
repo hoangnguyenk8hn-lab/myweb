@@ -30,7 +30,7 @@ import {
   resolveElement,
   worldBounds,
 } from "./sceneGeometry";
-import type { DiagramDocument, DiagramElement, Point } from "./types";
+import type { DiagramDocument, Point } from "./types";
 
 type Props = ComponentProps<typeof CurrentCanvasCore>;
 type ReplaceUpdate = Parameters<Props["onReplace"]>[0];
@@ -141,14 +141,21 @@ export function CurrentCanvas(p: Props) {
     const source = startRef.current;
     if (!source) return null;
     const previous = previewRef.current,
-      directTarget = perpendicularTargetAt(pointer, elements, p.zoom),
+      scale = Math.max(p.zoom, 1e-6),
+      inQuickPick =
+        !!previous &&
+        Math.hypot(pointer.x - previous.foot.x, pointer.y - previous.foot.y) <=
+          30 / scale,
+      directTarget = inQuickPick
+        ? null
+        : perpendicularTargetAt(pointer, elements, p.zoom),
       retainedTarget =
-        !directTarget &&
         previous &&
-        perpendicularRetainsTargetAt(pointer, previous, p.zoom)
+        (inQuickPick ||
+          (!directTarget && perpendicularRetainsTargetAt(pointer, previous, p.zoom)))
           ? previous.target
           : null,
-      target = directTarget ?? retainedTarget,
+      target = retainedTarget ?? directTarget,
       preview = buildPerpendicularPreview(
         source,
         target,
