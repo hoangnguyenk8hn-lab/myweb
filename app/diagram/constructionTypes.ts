@@ -92,6 +92,61 @@ export type ConstructionRuntimeState =
       detail?: string;
     };
 
+const finite = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+const point = (value: unknown): value is ConstructionPoint =>
+  !!value &&
+  typeof value === "object" &&
+  finite((value as ConstructionPoint).x) &&
+  finite((value as ConstructionPoint).y);
+const parents = (value: unknown, count: number): value is string[] =>
+  Array.isArray(value) &&
+  value.length === count &&
+  value.every((id) => typeof id === "string" && !!id);
+const selector = (value: unknown): value is ConstructionBranchSelector =>
+  !!value &&
+  typeof value === "object" &&
+  Number.isInteger((value as ConstructionBranchSelector).branch) &&
+  (value as ConstructionBranchSelector).branch >= 0 &&
+  ((value as ConstructionBranchSelector).seed === undefined ||
+    point((value as ConstructionBranchSelector).seed));
+
+/** Runtime guard for imported JSON and old documents. */
+export function isConstructionSpec(value: unknown): value is ConstructionSpec {
+  if (!value || typeof value !== "object") return false;
+  const spec = value as Record<string, unknown>;
+  if (spec.kind === "point-on-object") {
+    if (spec.mode !== "constrained" || !parents(spec.parents, 1)) return false;
+    const locator = spec.locator;
+    if (!locator || typeof locator !== "object") return false;
+    const l = locator as Record<string, unknown>;
+    if (l.kind === "segment")
+      return Number.isInteger(l.segment) &&
+        (l.segment as number) >= 0 &&
+        finite(l.t) &&
+        (l.t as number) >= 0 &&
+        (l.t as number) <= 1;
+    if (l.kind === "circle") return finite(l.angle);
+    if (l.kind === "path")
+      return finite(l.t) && (l.t as number) >= 0 && (l.t as number) <= 1;
+    return false;
+  }
+  if (spec.kind === "intersection")
+    return (
+      spec.mode === "derived" &&
+      parents(spec.parents, 2) &&
+      selector(spec.selector)
+    );
+  if (spec.kind === "tangent")
+    return (
+      spec.mode === "derived" &&
+      parents(spec.parents, 2) &&
+      selector(spec.selector) &&
+      (spec.extent === undefined || ["segment", "line"].includes(spec.extent as string))
+    );
+  return false;
+}
+
 export function constructionParentIds(spec: ConstructionSpec | undefined): string[] {
   return spec ? [...spec.parents] : [];
 }
