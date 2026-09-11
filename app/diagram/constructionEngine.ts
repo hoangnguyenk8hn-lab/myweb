@@ -2,7 +2,10 @@ import type {
   ConstructionRuntimeState,
   ConstructionSpec,
 } from "./constructionTypes";
-import { constructionParentIds } from "./constructionTypes";
+import {
+  constructionParentIds,
+  isConstructionSpec,
+} from "./constructionTypes";
 import type { DiagramDocument, DiagramElement } from "./types";
 import { resolveElementFromLookup } from "./sceneGeometry";
 import {
@@ -62,9 +65,13 @@ const EVALUATORS: Record<ConstructionSpec["kind"], Evaluator> = {
       : { ok: false, reason: "unsupported" },
 };
 
+function validConstruction(element: DiagramElement) {
+  return isConstructionSpec(element.construction) ? element.construction : undefined;
+}
+
 function elementDependencies(element: DiagramElement) {
   const ids = [
-    ...constructionParentIds(element.construction),
+    ...constructionParentIds(validConstruction(element)),
     element.fromId,
     element.toId,
   ].filter((id): id is string => !!id);
@@ -141,7 +148,7 @@ export function resolveConstructionDocument(
   for (const id of graph.order) {
     const source = raw.get(id);
     if (!source) continue;
-    const spec = source.construction;
+    const spec = validConstruction(source);
     let element = source;
 
     if (!spec) states.set(id, { status: "free" });
@@ -204,5 +211,5 @@ export function resolveConstructionDocument(
 }
 
 export function constructionClass(element: DiagramElement) {
-  return element.construction?.mode ?? "free";
+  return validConstruction(element)?.mode ?? "free";
 }
