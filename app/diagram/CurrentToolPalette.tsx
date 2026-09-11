@@ -144,6 +144,13 @@ export function CurrentToolPalette({
               <path d="M5 22L14.5 8.6" />
             </svg>,
           )}
+          {basic(
+            "perpendicular",
+            "Perpendicular Line",
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <path d="M4 21H24M14 21V5M14 16H19V21" />
+            </svg>,
+          )}
           {basic("arrow", "Arrow")}
           {basic("curved-arrow", "Curved Arrow")}
           {basic(
