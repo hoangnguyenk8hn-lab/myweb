@@ -12,6 +12,39 @@ import type { DiagramTool, PlotSettings } from "./types";
 
 export type GuidedConstructionTool = Exclude<ConstructionCommand, "detach">;
 
+const CONSTRUCTION_OVERLAY_CSS = `
+  .drawing-main { position: relative; }
+  .drawing-main > [role="status"][aria-live="polite"] {
+    position: absolute !important;
+    top: 44px;
+    left: 50%;
+    z-index: 24;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    min-height: 32px !important;
+    transform: translateX(-50%);
+    padding: 5px 8px 5px 10px !important;
+    border: 1px solid #ccd9e8 !important;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.97) !important;
+    box-shadow: 0 2px 8px #0000001f;
+    color: #31445a !important;
+    white-space: nowrap;
+  }
+  .drawing-main > [role="status"][aria-live="polite"] > button {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    border: 1px solid #d5dde7;
+    border-radius: 4px;
+    background: #fff;
+    color: #617084;
+  }
+  .drawing-main > [role="status"][aria-live="polite"] > button:hover {
+    background: #f2f5f8;
+  }
+`;
+
 const ShapeButton = ({
   shape,
   active,
@@ -163,6 +196,7 @@ export function CurrentToolPalette({
   ];
   return (
     <aside className="shape-sidebar" aria-label="Drawing tools">
+      <style>{CONSTRUCTION_OVERLAY_CSS}</style>
       {header("general", "General")}
       {open.general && (
         <div className="general-tools">
@@ -189,7 +223,15 @@ export function CurrentToolPalette({
       )}
       {header("construct", "Construct")}
       {open.construct && (
-        <div className="plot-tools" aria-label="Dynamic geometry tools">
+        <div
+          aria-label="Dynamic geometry tools"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 2,
+            padding: "5px 5px 7px",
+          }}
+        >
           {constructions.map(({ tool, label, hint }) => {
             const active = activeConstruction === tool;
             return (
@@ -199,17 +241,38 @@ export function CurrentToolPalette({
                 aria-label={label}
                 aria-pressed={active}
                 onClick={() => onConstructionSelect(tool)}
-                style={
-                  active
-                    ? {
-                        boxShadow: "inset 0 0 0 2px #4f8edc",
-                        background: "#eaf3ff",
-                      }
-                    : undefined
-                }
+                style={{
+                  minWidth: 0,
+                  height: 58,
+                  padding: "4px 2px 3px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                  border: `1px solid ${active ? "#8fb4dc" : "transparent"}`,
+                  borderRadius: 3,
+                  background: active ? "#edf5fd" : "transparent",
+                  color: active ? "#547ca8" : "#8d8d8d",
+                  fontSize: 9,
+                  lineHeight: 1.05,
+                }}
               >
-                <ConstructionIcon tool={tool} />
-                <span>{label}</span>
+                <span style={{ width: 34, height: 28 }}>
+                  <ConstructionIcon tool={tool} />
+                </span>
+                <span
+                  style={{
+                    width: "100%",
+                    minHeight: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                  }}
+                >
+                  {label}
+                </span>
               </button>
             );
           })}
