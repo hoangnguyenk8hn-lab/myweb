@@ -18,6 +18,11 @@ export type TangentCandidate = {
   throughSource?: boolean;
 };
 
+export type TangentLinePreview = {
+  start: Point;
+  end: Point;
+};
+
 const SMOOTH_PATH_SHAPES = new Set([
   "arc",
   "quadratic",
@@ -28,6 +33,7 @@ const SMOOTH_PATH_SHAPES = new Set([
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const cross = (a: Point, b: Point) => a.x * b.y - a.y * b.x;
+const dot = (a: Point, b: Point) => a.x * b.x + a.y * b.y;
 
 function normalized(v: Point): Point | null {
   const length = Math.hypot(v.x, v.y);
@@ -40,6 +46,82 @@ function tangentEnd(source: Point, contact: Point, direction: Point): Point {
   return unit
     ? { x: source.x + unit.x * 100, y: source.y + unit.y * 100 }
     : contact;
+}
+
+function candidateDirection(
+  source: Point,
+  candidate: TangentCandidate,
+): Point | null {
+  return normalized(
+    candidate.throughSource
+      ? { x: candidate.end.x - source.x, y: candidate.end.y - source.y }
+      : {
+          x: candidate.contact.x - source.x,
+          y: candidate.contact.y - source.y,
+        },
+  );
+}
+
+/**
+ * Convert a tangent branch into the finite line shown/created by the tool.
+ * External tangents always reach the contact point, then can be extended by
+ * dragging farther along the tangent. When the source itself is the contact,
+ * the line grows symmetrically in both directions around the source.
+ */
+export function tangentLineForPointer(
+  source: Point,
+  candidate: TangentCandidate,
+  pointer: Point,
+  minHalfLength = 24,
+): TangentLinePreview {
+  const unit = candidateDirection(source, candidate);
+  if (!unit) return { start: source, end: candidate.end };
+
+  const offset = { x: pointer.x - source.x, y: pointer.y - source.y };
+  if (candidate.throughSource) {
+    const halfLength = Math.max(minHalfLength, Math.abs(dot(offset, unit)));
+    return {
+      start: {
+        x: source.x - unit.x * halfLength,
+        y: source.y - unit.y * halfLength,
+      },
+      end: {
+        x: source.x + unit.x * halfLength,
+        y: source.y + unit.y * halfLength,
+      },
+    };
+  }
+
+  const contactLength = distance(source, candidate.contact),
+    length = Math.max(contactLength, dot(offset, unit));
+  return {
+    start: source,
+    end: {
+      x: source.x + unit.x * length,
+      y: source.y + unit.y * length,
+    },
+  };
+}
+
+/**
+ * Keep one already-selected tangent branch alive after the pointer leaves the
+ * target contour and moves along that tangent to choose its final length.
+ */
+export function tangentRetainsCandidateAt(
+  pointer: Point,
+  source: Point,
+  candidate: TangentCandidate,
+  zoom = 1,
+) {
+  const unit = candidateDirection(source, candidate);
+  if (!unit) return false;
+  const offset = { x: pointer.x - source.x, y: pointer.y - source.y },
+    scale = Math.max(zoom, 1e-6),
+    lateral = Math.abs(cross(offset, unit)),
+    along = dot(offset, unit);
+  if (lateral > 14 / scale) return false;
+  if (candidate.throughSource) return Math.abs(along) >= 8 / scale;
+  return along >= distance(source, candidate.contact) - 18 / scale;
 }
 
 /**
