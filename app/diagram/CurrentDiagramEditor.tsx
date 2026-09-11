@@ -8,6 +8,12 @@ import { PlotDialog } from "./PlotDialog";
 import { ExportDialog } from "./ExportDialog";
 import { useCurrentHistory } from "./currentHistory";
 import {
+  applyResolvedConstructionEdit,
+  runConstructionCommand,
+  type ConstructionCommand,
+} from "./constructionCommands";
+import { remapConstruction } from "./constructionTypes";
+import {
   blankDocument,
   CURRENT_STORAGE_KEY,
   exampleDocument,
@@ -141,12 +147,15 @@ export function CurrentDiagramEditor() {
   useEffect(() => {
     if (!hydrated || history.inGesture) return;
     try {
-      localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(d));
+      localStorage.setItem(
+        CURRENT_STORAGE_KEY,
+        JSON.stringify(history.sourceDocument),
+      );
       setSaveState("Saved");
     } catch {
       setSaveState("Save failed");
     }
-  }, [d, hydrated, history.inGesture]);
+  }, [history.sourceDocument, hydrated, history.inGesture]);
   useEffect(() => {
     if (!hydrated) return;
     const main = drawingMainRef.current;
@@ -198,20 +207,22 @@ export function CurrentDiagramEditor() {
   const toolbarUpdate = (next: Parameters<typeof history.commit>[0]) =>
     toolbarGesture.current ? history.replace(next) : history.commit(next);
   const patch = (update: Partial<DiagramElement>) =>
-    toolbarUpdate((doc) => ({
-      ...doc,
-      elements: doc.elements.map((e) => {
-        if (!selectedIds.includes(e.id)) return e;
-        const next = { ...e, ...update };
-        if (FIXED_ASPECT_SHAPES.has(e.shape ?? e.type)) {
-          if (update.width !== undefined && update.height === undefined)
-            next.height = (update.width * e.height) / (e.width || 1);
-          if (update.height !== undefined && update.width === undefined)
-            next.width = (update.height * e.width) / (e.height || 1);
-        }
-        return next;
+    toolbarUpdate((doc) =>
+      applyResolvedConstructionEdit(doc, {
+        ...doc,
+        elements: doc.elements.map((e) => {
+          if (!selectedIds.includes(e.id)) return e;
+          const next = { ...e, ...update };
+          if (FIXED_ASPECT_SHAPES.has(e.shape ?? e.type)) {
+            if (update.width !== undefined && update.height === undefined)
+              next.height = (update.width * e.height) / (e.width || 1);
+            if (update.height !== undefined && update.width === undefined)
+              next.width = (update.height * e.width) / (e.height || 1);
+          }
+          return next;
+        }),
       }),
-    }));
+    );
   const style = (update: Partial<ElementStyle>) =>
     toolbarUpdate((doc) => ({
       ...doc,
@@ -221,6 +232,20 @@ export function CurrentDiagramEditor() {
           : e,
       ),
     }));
+  const runConstruction = (command: ConstructionCommand) => {
+    const result = runConstructionCommand(
+      history.sourceDocument,
+      d,
+      selectedIds,
+      command,
+    );
+    if (!result.error) {
+      history.commit(result.document);
+      setSelectedIds(result.createdIds);
+      setTool("select");
+    }
+    report(result.message);
+  };
   const remove = () => {
     const ids = d.elements
       .filter((e) => selectedIds.includes(e.id) && !e.locked)
@@ -264,6 +289,7 @@ export function CurrentDiagramEditor() {
       intersectionWith: e.intersectionWith?.flatMap((id) =>
         idMap.has(id) ? [idMap.get(id)!] : [],
       ),
+      construction: remapConstruction(e.construction, idMap),
     }));
     history.commit((doc) => ({
       ...doc,
@@ -413,7 +439,7 @@ export function CurrentDiagramEditor() {
         fileInput.current?.click();
         break;
       case "json":
-        downloadJson(d);
+        downloadJson(history.sourceDocument);
         break;
       case "image-export":
         setDialog("image");
@@ -598,7 +624,10 @@ export function CurrentDiagramEditor() {
   };
   const save = () => {
     try {
-      localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(d));
+      localStorage.setItem(
+        CURRENT_STORAGE_KEY,
+        JSON.stringify(history.sourceDocument),
+      );
       setSaveState("Saved");
       report("Drawing saved in this browser");
     } catch {
@@ -615,7 +644,7 @@ export function CurrentDiagramEditor() {
             {d.elements.length} objects · {d.width} × {d.height} px
           </p>
           <button onClick={() => setClosed(false)}>Edit Drawing</button>
-          <button onClick={() => downloadJson(d)}>Save JSON</button>
+          <button onClick={() => downloadJson(history.sourceDocument)}>Save JSON</button>
         </section>
       ) : (
         <section className="drawing-window" aria-label="Drawing editor">
@@ -665,7 +694,11 @@ export function CurrentDiagramEditor() {
                 selectedIds={selectedIds}
                 onSelect={select}
                 onTool={canvasTool}
-                onReplace={history.replace}
+                onReplace={(update) =>
+                  history.replace((source) =>
+                    applyResolvedConstructionEdit(source, update),
+                  )
+                }
                 onBegin={history.beginGesture}
                 onEnd={history.endGesture}
                 onCancel={history.cancelGesture}
@@ -734,6 +767,50 @@ export function CurrentDiagramEditor() {
                     Zoom: {Math.round(zoom * 100)}%
                   </span>
                 </Dropdown>
+                <div
+                  aria-label="Dynamic Geometry"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    marginLeft: 8,
+                  }}
+                >
+                  <strong style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                    Dynamic Geometry
+                  </strong>
+                  <button
+                    title="Chọn Point và Line/Curve"
+                    onClick={() => runConstruction("point-on-line")}
+                  >
+                    Point on Line
+                  </button>
+                  <button
+                    title="Chọn Point và Circle/Ellipse"
+                    onClick={() => runConstruction("point-on-circle")}
+                  >
+                    Point on Circle
+                  </button>
+                  <button
+                    title="Chọn đúng hai đối tượng"
+                    onClick={() => runConstruction("intersection")}
+                  >
+                    Intersection
+                  </button>
+                  <button
+                    title="Chọn Point và Circle/Ellipse"
+                    onClick={() => runConstruction("tangent")}
+                  >
+                    Tangent
+                  </button>
+                  <button
+                    title="Biến đối tượng phụ thuộc thành đối tượng tự do"
+                    onClick={() => runConstruction("detach")}
+                  >
+                    Detach
+                  </button>
+                </div>
                 <span className="drawing-hint">
                   {tool !== "select" && tool !== "hand"
                     ? tool === "polyline" || tool === "polycurve"

@@ -1,12 +1,13 @@
 import type { DiagramDocument, DiagramElement, Point } from "./types";
 import type { Bounds } from "./pathBounds";
 import {
+  center,
   drawElement as baseDrawElement,
   lineVertices,
   moveLineEndpoint as baseMoveLineEndpoint,
   resizeElements as baseResizeElements,
-  resolveElement as baseResolveElement,
   sceneBounds as baseSceneBounds,
+  TEXT_TYPES,
   within as baseWithin,
   worldBounds as baseWorldBounds,
   worldPoint,
@@ -31,29 +32,73 @@ const CENTER_SELECTION_SHAPES = new Set([
 const ROUND_ATTACHMENT_SHAPES = new Set(["circle", "ellipse"]);
 const STATIC_GEOMETRY_LINES = new Set(["line", "curve"]);
 
+function resolvedDecoration(e: DiagramElement) {
+  const shape = e.shape ?? e.type;
+  return CENTER_SELECTION_SHAPES.has(shape) ? { ...e, boxed: true } : e;
+}
+
+/**
+ * Resolve legacy connector dependencies from an arbitrary lookup. Construction
+ * Engine uses this overload so fromId/toId participate in the same dependency
+ * order without rebuilding a temporary DiagramDocument for every element.
+ */
+export function resolveElementFromLookup(
+  e: DiagramElement,
+  lookup: (id: string) => DiagramElement | undefined,
+): DiagramElement {
+  const source = STATIC_GEOMETRY_LINES.has(e.type)
+    ? { ...e, fromId: undefined, toId: undefined }
+    : e;
+  if (!source.fromId && !source.toId) return resolvedDecoration(source);
+
+  const from = source.fromId ? lookup(source.fromId) : undefined,
+    to = source.toId ? lookup(source.toId) : undefined;
+  let start = from ? center(from) : { x: source.x, y: source.y },
+    end = to
+      ? center(to)
+      : { x: source.x + source.width, y: source.y + source.height };
+  const anchor = (node: DiagramElement, towards: Point) => {
+    const c = center(node),
+      dx = towards.x - c.x,
+      dy = towards.y - c.y,
+      pad = TEXT_TYPES.has(node.type) ? 4 : 1,
+      k =
+        1 /
+        Math.max(
+          Math.abs(dx) / (Math.abs(node.width) / 2 + pad),
+          Math.abs(dy) / (Math.abs(node.height) / 2 + pad),
+          0.0001,
+        );
+    return { x: c.x + dx * k, y: c.y + dy * k };
+  };
+  const originalStart = start;
+  if (from) start = anchor(from, end);
+  if (to) end = anchor(to, originalStart);
+  let next = source;
+  if (from) next = baseMoveLineEndpoint(next, 0, start);
+  if (to) next = baseMoveLineEndpoint(next, 1, end);
+  return resolvedDecoration({
+    ...next,
+    fromId: source.fromId,
+    toId: source.toId,
+  });
+}
+
 /**
  * Mark core boxed geometry as centered in the resolved scene representation.
  * `boxed` is already the selection-layer signal for showing a center point;
  * for non-line shapes it does not change their rendered geometry.
  *
  * Plain Line/Curve objects are geometric primitives, not live connectors.
- * Old endpoint drops could persist fromId/toId on them and baseResolveElement
- * would then move the supposedly fixed endpoint whenever the other end moved.
- * Ignore those attachment ids for Line/Curve; Arrow/Curved Arrow keep the
- * existing live-connector behavior.
+ * Old endpoint drops could persist fromId/toId on them and would otherwise move
+ * the supposedly fixed endpoint whenever the other end moved. Arrow/Curved
+ * Arrow keep their live connector behavior.
  */
 export function resolveElement(
   e: DiagramElement,
   doc: DiagramDocument,
 ): DiagramElement {
-  const source = STATIC_GEOMETRY_LINES.has(e.type)
-    ? { ...e, fromId: undefined, toId: undefined }
-    : e;
-  const resolved = baseResolveElement(source, doc);
-  const shape = resolved.shape ?? resolved.type;
-  return CENTER_SELECTION_SHAPES.has(shape)
-    ? { ...resolved, boxed: true }
-    : resolved;
+  return resolveElementFromLookup(e, (id) => doc.elements.find((n) => n.id === id));
 }
 
 /** A Point is one geometric coordinate; its marker size is visual only. */
