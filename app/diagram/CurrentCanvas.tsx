@@ -58,6 +58,11 @@ import {
   type TangentCandidate,
 } from "./tangents";
 import {
+  perpendicularPreview as buildPerpendicularPreview,
+  perpendicularTargetAt,
+  type PerpendicularPreview,
+} from "./perpendicular";
+import {
   pointReflectionPreview as buildPointReflectionPreview,
   pointReflectionTargetAt,
   type PointReflectionPreview,
@@ -80,6 +85,7 @@ type Gesture =
       original: DiagramElement;
     }
   | { kind: "tangent"; start: Point }
+  | { kind: "perpendicular"; start: Point }
   | { kind: "point-reflection"; start: Point }
   | {
       kind: "move";
@@ -204,6 +210,9 @@ export function CurrentCanvas(p: Props) {
       candidates: TangentCandidate[];
       active: number;
     } | null>(null),
+    [perpendicularStart, setPerpendicularStart] = useState<Point | null>(null),
+    [perpendicularPreview, setPerpendicularPreview] =
+      useState<PerpendicularPreview | null>(null),
     [reflectionStart, setReflectionStart] = useState<Point | null>(null),
     [reflectionPreview, setReflectionPreview] =
       useState<PointReflectionPreview | null>(null),
@@ -247,6 +256,10 @@ export function CurrentCanvas(p: Props) {
     if (tool !== "tangent") {
       setTangentStart(null);
       setTangentPreview(null);
+    }
+    if (tool !== "perpendicular") {
+      setPerpendicularStart(null);
+      setPerpendicularPreview(null);
     }
     if (tool !== "point-reflection") {
       setReflectionStart(null);
@@ -429,6 +442,8 @@ export function CurrentCanvas(p: Props) {
         setPolyPreview(null);
         setTangentStart(null);
         setTangentPreview(null);
+        setPerpendicularStart(null);
+        setPerpendicularPreview(null);
         setReflectionStart(null);
         setReflectionPreview(null);
         setSnapLines({});
@@ -511,6 +526,14 @@ export function CurrentCanvas(p: Props) {
       setTangentPreview(null);
       p.onSelect([]);
       begin(event, { kind: "tangent", start });
+      return;
+    }
+    if (tool === "perpendicular") {
+      const start = snap(q, []);
+      setPerpendicularStart(start);
+      setPerpendicularPreview(null);
+      p.onSelect([]);
+      begin(event, { kind: "perpendicular", start });
       return;
     }
     if (tool === "point-reflection") {
@@ -657,6 +680,13 @@ export function CurrentCanvas(p: Props) {
         }
       });
       setTangentPreview({ targetId: target.id, candidates, active });
+      return;
+    }
+    if (g.kind === "perpendicular") {
+      const target = perpendicularTargetAt(q, elements, zoom);
+      setPerpendicularPreview(
+        buildPerpendicularPreview(g.start, target, d.width, d.height),
+      );
       return;
     }
     if (g.kind === "point-reflection") {
@@ -930,6 +960,23 @@ export function CurrentCanvas(p: Props) {
       } else p.onCancel();
       setTangentStart(null);
       setTangentPreview(null);
+    } else if (g.kind === "perpendicular") {
+      const target = perpendicularTargetAt(q, elements, zoom),
+        preview = buildPerpendicularPreview(g.start, target, d.width, d.height);
+      if (preview) {
+        const line = makeElement(
+          "line",
+          preview.start.x,
+          preview.start.y,
+          preview.end.x - preview.start.x,
+          preview.end.y - preview.start.y,
+        );
+        p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
+        p.onSelect([line.id]);
+        p.onEnd();
+      } else p.onCancel();
+      setPerpendicularStart(null);
+      setPerpendicularPreview(null);
     } else if (g.kind === "point-reflection") {
       const target = pointReflectionTargetAt(q, elements, snapTargets, zoom),
         preview = buildPointReflectionPreview(g.start, target);
@@ -1077,6 +1124,8 @@ export function CurrentCanvas(p: Props) {
               setDragging(false);
               setTangentStart(null);
               setTangentPreview(null);
+              setPerpendicularStart(null);
+              setPerpendicularPreview(null);
               setReflectionStart(null);
               setReflectionPreview(null);
               setSnapLines({});
@@ -1190,6 +1239,42 @@ export function CurrentCanvas(p: Props) {
                     >
                       No tangent
                     </text>
+                  )}
+                </g>
+              )}
+              {perpendicularStart && (
+                <g pointerEvents="none" data-perpendicular-preview>
+                  <circle
+                    cx={perpendicularStart.x}
+                    cy={perpendicularStart.y}
+                    r={4 / zoom}
+                    fill="#ffffff"
+                    stroke="#348b57"
+                    strokeWidth={1.2 / zoom}
+                  />
+                  {perpendicularPreview && (
+                    <>
+                      <path
+                        d={`M${perpendicularPreview.target.a.x} ${perpendicularPreview.target.a.y}L${perpendicularPreview.target.b.x} ${perpendicularPreview.target.b.y}`}
+                        fill="none"
+                        stroke="#8cb99a"
+                        strokeWidth={1.2 / zoom}
+                      />
+                      <path
+                        d={`M${perpendicularPreview.start.x} ${perpendicularPreview.start.y}L${perpendicularPreview.end.x} ${perpendicularPreview.end.y}`}
+                        fill="none"
+                        stroke="#2f9e5b"
+                        strokeWidth={1.7 / zoom}
+                      />
+                      <circle
+                        cx={perpendicularPreview.foot.x}
+                        cy={perpendicularPreview.foot.y}
+                        r={3 / zoom}
+                        fill="#2f9e5b"
+                        stroke="white"
+                        strokeWidth={1 / zoom}
+                      />
+                    </>
                   )}
                 </g>
               )}
