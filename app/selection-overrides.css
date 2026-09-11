@@ -30,7 +30,8 @@
 }
 
 /* Match Point Reflection's preview language to Tangent: white/green source,
- * solid active green construction and filled green result/target points. */
+ * green construction guides and filled green result/target points. Keep the
+ * source-to-result construction preview dashed as the canvas defines it. */
 .selection-layer [data-point-reflection-preview] > circle:first-child {
   fill: #ffffff !important;
   stroke: #348b57 !important;
@@ -38,7 +39,6 @@
 
 .selection-layer [data-point-reflection-preview] > path {
   stroke: #2f9e5b !important;
-  stroke-dasharray: none !important;
 }
 
 .selection-layer [data-point-reflection-preview] > circle:not(:first-child) {
