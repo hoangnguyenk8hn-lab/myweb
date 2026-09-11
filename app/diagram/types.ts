@@ -5,6 +5,7 @@ export type DiagramTool =
   | "select"
   | "hand"
   | "tangent"
+  | "point-reflection"
   | "point"
   | "plain-text"
   | "boxed-text"
@@ -39,7 +40,7 @@ export type DiagramTool =
 
 export type ElementType = Exclude<
   DiagramTool,
-  "select" | "hand" | "tangent" | `shape:${string}`
+  "select" | "hand" | "tangent" | "point-reflection" | `shape:${string}`
 >;
 export type DashStyle = "solid" | "dashed" | "dotted";
 export type ArrowHead =
