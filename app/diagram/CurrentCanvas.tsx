@@ -57,6 +57,11 @@ import {
   tangentTargetAt,
   type TangentCandidate,
 } from "./tangents";
+import {
+  pointReflectionPreview as buildPointReflectionPreview,
+  pointReflectionTargetAt,
+  type PointReflectionPreview,
+} from "./pointReflection";
 import type {
   DiagramDocument,
   DiagramElement,
@@ -75,6 +80,7 @@ type Gesture =
       original: DiagramElement;
     }
   | { kind: "tangent"; start: Point }
+  | { kind: "point-reflection"; start: Point }
   | {
       kind: "move";
       start: Point;
@@ -198,6 +204,9 @@ export function CurrentCanvas(p: Props) {
       candidates: TangentCandidate[];
       active: number;
     } | null>(null),
+    [reflectionStart, setReflectionStart] = useState<Point | null>(null),
+    [reflectionPreview, setReflectionPreview] =
+      useState<PointReflectionPreview | null>(null),
     [vertexSelection, setVertexSelection] = useState<{
       id: string;
       index: number;
@@ -238,6 +247,10 @@ export function CurrentCanvas(p: Props) {
     if (tool !== "tangent") {
       setTangentStart(null);
       setTangentPreview(null);
+    }
+    if (tool !== "point-reflection") {
+      setReflectionStart(null);
+      setReflectionPreview(null);
     }
   }, [tool]);
   const pos = (event: { clientX: number; clientY: number }): Point => {
@@ -416,6 +429,8 @@ export function CurrentCanvas(p: Props) {
         setPolyPreview(null);
         setTangentStart(null);
         setTangentPreview(null);
+        setReflectionStart(null);
+        setReflectionPreview(null);
         setSnapLines({});
         p.onCancel();
         setContext(null);
@@ -496,6 +511,14 @@ export function CurrentCanvas(p: Props) {
       setTangentPreview(null);
       p.onSelect([]);
       begin(event, { kind: "tangent", start });
+      return;
+    }
+    if (tool === "point-reflection") {
+      const start = snap(q, []);
+      setReflectionStart(start);
+      setReflectionPreview(null);
+      p.onSelect([]);
+      begin(event, { kind: "point-reflection", start });
       return;
     }
     if (tool === "polyline" || tool === "polycurve") {
@@ -634,6 +657,11 @@ export function CurrentCanvas(p: Props) {
         }
       });
       setTangentPreview({ targetId: target.id, candidates, active });
+      return;
+    }
+    if (g.kind === "point-reflection") {
+      const target = pointReflectionTargetAt(q, elements, snapTargets, zoom);
+      setReflectionPreview(buildPointReflectionPreview(g.start, target));
       return;
     }
     if (g.kind === "draw") {
@@ -902,6 +930,17 @@ export function CurrentCanvas(p: Props) {
       } else p.onCancel();
       setTangentStart(null);
       setTangentPreview(null);
+    } else if (g.kind === "point-reflection") {
+      const target = pointReflectionTargetAt(q, elements, snapTargets, zoom),
+        preview = buildPointReflectionPreview(g.start, target);
+      if (preview) {
+        const point = makeElement("point", preview.result.x, preview.result.y, 0, 0);
+        p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, point] }));
+        p.onSelect([point.id]);
+        p.onEnd();
+      } else p.onCancel();
+      setReflectionStart(null);
+      setReflectionPreview(null);
     } else if (g.kind !== "pan") {
       if (g.kind === "draw" && Math.hypot(q.x - g.start.x, q.y - g.start.y) < 4)
         patch(
@@ -1038,6 +1077,8 @@ export function CurrentCanvas(p: Props) {
               setDragging(false);
               setTangentStart(null);
               setTangentPreview(null);
+              setReflectionStart(null);
+              setReflectionPreview(null);
               setSnapLines({});
               p.onCancel();
             }}
@@ -1149,6 +1190,55 @@ export function CurrentCanvas(p: Props) {
                     >
                       No tangent
                     </text>
+                  )}
+                </g>
+              )}
+              {reflectionStart && (
+                <g pointerEvents="none" data-point-reflection-preview>
+                  <circle
+                    cx={reflectionStart.x}
+                    cy={reflectionStart.y}
+                    r={4 / zoom}
+                    fill="white"
+                    stroke="#7b61c9"
+                    strokeWidth={1.2 / zoom}
+                  />
+                  {reflectionPreview?.target.kind === "line" && (
+                    <path
+                      d={`M${reflectionPreview.target.a.x} ${reflectionPreview.target.a.y}L${reflectionPreview.target.b.x} ${reflectionPreview.target.b.y}`}
+                      fill="none"
+                      stroke="#7b61c9"
+                      strokeWidth={1.5 / zoom}
+                    />
+                  )}
+                  {reflectionPreview?.target.kind === "point" && (
+                    <circle
+                      cx={reflectionPreview.target.point.x}
+                      cy={reflectionPreview.target.point.y}
+                      r={3.5 / zoom}
+                      fill="#7b61c9"
+                      stroke="white"
+                      strokeWidth={1 / zoom}
+                    />
+                  )}
+                  {reflectionPreview && (
+                    <>
+                      <path
+                        d={`M${reflectionStart.x} ${reflectionStart.y}L${reflectionPreview.result.x} ${reflectionPreview.result.y}`}
+                        fill="none"
+                        stroke="#9b8ad1"
+                        strokeWidth={0.9 / zoom}
+                        strokeDasharray={`${4 / zoom} ${3 / zoom}`}
+                      />
+                      <circle
+                        cx={reflectionPreview.result.x}
+                        cy={reflectionPreview.result.y}
+                        r={4 / zoom}
+                        fill="#7b61c9"
+                        stroke="white"
+                        strokeWidth={1 / zoom}
+                      />
+                    </>
                   )}
                 </g>
               )}
