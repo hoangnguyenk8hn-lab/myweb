@@ -140,18 +140,38 @@ export function SceneElement({
   const markerSize = markerDimension(e, "mid");
   const startHead = isRightAngleMarker(e.startHead) ? "none" : e.startHead ?? "none";
   const endHead = isRightAngleMarker(e.endHead) ? "none" : e.endHead ?? "none";
-  // Old documents stored this decoration in an end marker. Keep them visible
-  // without treating them as arrows; newly created lines use `rightAngle`.
-  const rightAngle =
-    e.rightAngle ??
-    (isRightAngleMarker(e.endHead)
-      ? { marker: e.endHead, at: 1 }
-      : isRightAngleMarker(e.startHead)
-        ? { marker: e.startHead, at: 0 }
-        : undefined);
-  const rightAnglePath = rightAngle
-    ? rightAngleDecorationPath(e, rightAngle, markerDimension(e, "end"))
-    : "";
+  // Construction marks and user-selected Tail/Head marks are independent.
+  // Keep right-angle heads out of SVG markerStart/markerEnd so Line does not
+  // become Arrow, then draw each corner at its own position and marker size.
+  const endpointRightAngles = [
+    isRightAngleMarker(e.startHead)
+      ? {
+          decoration: { marker: e.startHead, at: 0 },
+          size: markerDimension(e, "start"),
+          key: `tail-${e.startHead}`,
+        }
+      : null,
+    isRightAngleMarker(e.endHead)
+      ? {
+          decoration: { marker: e.endHead, at: 1 },
+          size: markerDimension(e, "end"),
+          key: `head-${e.endHead}`,
+        }
+      : null,
+  ].filter((entry): entry is NonNullable<typeof entry> => !!entry);
+  const rightAngles = [
+    ...endpointRightAngles,
+    e.rightAngle &&
+    !endpointRightAngles.some(
+      ({ decoration }) => Math.abs(decoration.at - e.rightAngle!.at) < 1e-8,
+    )
+      ? {
+          decoration: e.rightAngle,
+          size: markerDimension(e, "end"),
+          key: `construction-${e.rightAngle.at}-${e.rightAngle.marker}`,
+        }
+      : null,
+  ].filter((entry): entry is NonNullable<typeof entry> => !!entry);
   const marker = (position: string, head: ArrowHead) => (
     <marker
       key={position}
@@ -248,9 +268,10 @@ export function SceneElement({
           }
           mask={(e.breakSize ?? 0) > 0 ? `url(#break-${id})` : undefined}
         />
-        {rightAnglePath && (
+        {rightAngles.map(({ decoration, size, key }) => (
           <path
-            d={rightAnglePath}
+            key={key}
+            d={rightAngleDecorationPath(e, decoration, size)}
             fill="none"
             stroke={s.stroke}
             strokeWidth={s.strokeWidth}
@@ -258,7 +279,7 @@ export function SceneElement({
             strokeLinejoin="round"
             pointerEvents="none"
           />
-        )}
+        ))}
         {e.midHead && e.midHead !== "none" && (
           <g
             transform={`translate(${middle.x} ${middle.y}) rotate(${angle}) translate(${-markerSize / 2} ${-markerSize / 2}) scale(${markerSize / 10})`}

@@ -162,6 +162,26 @@ const MARKERS: { type: ArrowHead; symbol: string; name: string }[] = [
   { type: "plus", symbol: "+", name: "Plus" },
   { type: "dot", symbol: "●", name: "Dot" },
   { type: "circle", symbol: "○", name: "Circle" },
+  {
+    type: "right-angle-inside-left",
+    symbol: "⌜",
+    name: "Right angle upper-left",
+  },
+  {
+    type: "right-angle-inside-right",
+    symbol: "⌞",
+    name: "Right angle lower-left",
+  },
+  {
+    type: "right-angle-outside-left",
+    symbol: "⌝",
+    name: "Right angle upper-right",
+  },
+  {
+    type: "right-angle-outside-right",
+    symbol: "⌟",
+    name: "Right angle lower-right",
+  },
 ];
 export function MarkerPicker({
   label,

@@ -1,7 +1,4 @@
-import {
-  rightAngleGlyphSize,
-  rightAngleMarkerPath,
-} from "./lineMarkers";
+import { rightAngleMarkerPath } from "./lineMarkers";
 import type {
   DiagramElement,
   Point,
@@ -160,12 +157,7 @@ export function rightAngleGuidePath(
 ) {
   const frame = previewFrame(preview);
   return frame
-    ? rightAngleMarkerPath(
-        preview.foot,
-        frame.x,
-        marker,
-        rightAngleGlyphSize(size),
-      )
+    ? rightAngleMarkerPath(preview.foot, frame.x, marker, size)
     : "";
 }
 

@@ -20,6 +20,7 @@ const {
   assistedLinePreview,
   assistedLineTargetAt,
   assistedLineForPointer,
+  assistedLineRightAngleGuidePath,
   assistedLineRightAngleDecoration,
 } = require("../app/diagram/assistedLine.ts");
 const {
@@ -102,6 +103,23 @@ test("right-angle decorations keep the same 4/10 glyph size as legacy endHead", 
       9,
     ),
     "M100 0L100 -3.6L96.4 -3.6L96.4 0",
+  );
+});
+
+test("perpendicular preview guides stay large while committed marks use legacy size", () => {
+  const target = makeElement("line", 20, 100, 240, 0);
+  const preview = assistedLinePreview(
+    { x: 140, y: 30 },
+    assistedLineTargetAt("perpendicular", { x: 140, y: 100 }, [target]),
+  );
+  assert.ok(preview);
+  assert.equal(
+    assistedLineRightAngleGuidePath(
+      preview,
+      "right-angle-inside-left",
+      9,
+    ),
+    "M140 100L149 100L149 91L140 91",
   );
 });
 
