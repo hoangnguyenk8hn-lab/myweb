@@ -24,6 +24,7 @@ const {
 } = require("../app/diagram/assistedLine.ts");
 const {
   hasArrowHead,
+  rightAngleDecorationPath,
   rightAngleMarkerPath,
 } = require("../app/diagram/lineMarkers.ts");
 const { snapPointToScene } = require("../app/diagram/snapping.ts");
@@ -89,6 +90,18 @@ test("right-angle marks stay at the foot and never change a line into an arrow",
       9,
     ),
     /^M140 100L/,
+  );
+});
+
+test("right-angle decorations keep the same 4/10 glyph size as legacy endHead", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  assert.equal(
+    rightAngleDecorationPath(
+      line,
+      { marker: "right-angle-inside-left", at: 1 },
+      9,
+    ),
+    "M100 0L100 -3.6L96.4 -3.6L96.4 0",
   );
 });
 

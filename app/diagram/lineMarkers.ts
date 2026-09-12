@@ -14,6 +14,11 @@ export const RIGHT_ANGLE_MARKERS = [
   "right-angle-outside-right",
 ] as const satisfies readonly RightAngleMarker[];
 
+/** The legacy endHead glyph occupied 4 units inside a 10-unit marker tile. */
+export const LEGACY_RIGHT_ANGLE_GLYPH_RATIO = 0.4;
+export const rightAngleGlyphSize = (markerDimension: number) =>
+  markerDimension * LEGACY_RIGHT_ANGLE_GLYPH_RATIO;
+
 const MARKER_SIGNS: Record<RightAngleMarker, { x: -1 | 1; y: -1 | 1 }> = {
   "right-angle-inside-left": { x: -1, y: -1 },
   "right-angle-inside-right": { x: -1, y: 1 },
@@ -66,6 +71,6 @@ export function rightAngleDecorationPath(
     point,
     { x: after.x - before.x, y: after.y - before.y },
     decoration.marker,
-    size,
+    rightAngleGlyphSize(size),
   );
 }
