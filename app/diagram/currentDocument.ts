@@ -2,12 +2,18 @@ import { createId, DEFAULT_STYLE } from "./defaultDocument";
 import { DEFAULT_PLOT } from "./plotting";
 import { SHAPE_MAP } from "./shapes";
 import { DEFAULT_POINT_SIZE } from "./sceneGeometry";
-import type { DiagramDocument, DiagramElement, DiagramTool } from "./types";
+import {
+  CURRENT_DOCUMENT_VERSION,
+  isElementType,
+  type DiagramDocument,
+  type DiagramElement,
+  type DiagramTool,
+} from "./types";
 
-export const CURRENT_STORAGE_KEY = "diagram-draw-current-v2";
+export const CURRENT_STORAGE_KEY = "diagram-draw-current-v3";
 export function blankDocument(): DiagramDocument {
   return {
-    version: 1,
+    version: CURRENT_DOCUMENT_VERSION,
     width: 700,
     height: 400,
     grid: {
@@ -43,7 +49,9 @@ export function makeElement(
         tool === "angle-bisector" ||
         tool === "point-reflection"
       ? "rectangle"
-      : (tool as DiagramElement["type"]);
+      : isElementType(tool)
+        ? tool
+        : "rectangle";
   const text = ["text", "plain-text", "boxed-text"].includes(type);
   const line = ["line", "arrow", "curve", "curved-arrow"].includes(type);
   const point = shape === "point";

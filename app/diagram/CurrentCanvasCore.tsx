@@ -27,21 +27,18 @@ import { makeElement } from "./currentDocument";
 import { createId } from "./defaultDocument";
 import {
   absolutePoints,
-  addLineVertex,
   center,
   curveControls,
   drawElement,
   elementShapeId,
   elementTransform,
   isCurve,
-  lineSegmentPoint,
   lineVertices,
   LINE_TYPES,
   localPoint,
   moveLineEndpoint,
   moveLineVertex,
   movePolygonPoint,
-  removeLineVertex,
   resolveElement,
   resizeElements,
   sceneBounds,
@@ -61,16 +58,16 @@ import {
   type TangentLinePreview,
 } from "./tangents";
 import {
-  perpendicularLineForPointer,
-  perpendicularMarkerAt,
-  perpendicularPreview as buildPerpendicularPreview,
-  perpendicularRetainsTargetAt,
-  perpendicularTargetAt,
+  assistedLineForPointer as perpendicularLineForPointer,
+  assistedLineMarkerAt as perpendicularMarkerAt,
+  assistedLinePreview as buildPerpendicularPreview,
+  assistedLineRetainsTargetAt as perpendicularRetainsTargetAt,
+  assistedLineRightAngleDecoration as rightAngleDecorationForPreview,
+  assistedLineRightAngleGuidePath as rightAngleGuidePath,
+  assistedLineTargetAt,
   RIGHT_ANGLE_MARKERS,
-  rightAngleDecorationForPreview,
-  rightAngleGuidePath,
-  type PerpendicularPreview,
-} from "./perpendicular";
+  type AssistedLinePreview as PerpendicularPreview,
+} from "./assistedLine";
 import {
   pointReflectionPreview as buildPointReflectionPreview,
   pointReflectionTargetAt,
@@ -243,11 +240,7 @@ export function CurrentCanvas(p: Props) {
       useState<PerpendicularPreview | null>(null),
     [reflectionStart, setReflectionStart] = useState<Point | null>(null),
     [reflectionPreview, setReflectionPreview] =
-      useState<PointReflectionPreview | null>(null),
-    [vertexSelection, setVertexSelection] = useState<{
-      id: string;
-      index: number;
-    } | null>(null);
+      useState<PointReflectionPreview | null>(null);
   const elements = useMemo(
     () => d.elements.map((e) => resolveElement(e, d)),
     [d.elements],
@@ -276,10 +269,6 @@ export function CurrentCanvas(p: Props) {
     !!single &&
     (singleShape === "circle" || single.textBorder === "circle" || !!single.boxed);
   const edit = elements.find((e) => e.id === p.editId);
-  useEffect(() => {
-    if (vertexSelection && !selectedIds.includes(vertexSelection.id))
-      setVertexSelection(null);
-  }, [selectedIds, vertexSelection]);
   useEffect(() => {
     if (tool !== "tangent") {
       setTangentStart(null);
@@ -410,7 +399,7 @@ export function CurrentCanvas(p: Props) {
         30 / scale;
     const directTarget = inQuickPick
       ? null
-      : perpendicularTargetAt(pointer, elements, zoom, mode);
+      : assistedLineTargetAt(mode, pointer, elements, zoom);
     const retainedTarget =
       previous &&
       (inQuickPick ||
@@ -426,12 +415,13 @@ export function CurrentCanvas(p: Props) {
     const extended = base
       ? perpendicularLineForPointer(pointer, base, previousEnd, zoom)
       : null;
-    const next = extended
-      ? {
-          ...extended,
-          marker: perpendicularMarkerAt(pointer, extended, zoom),
-        }
-      : null;
+    const next =
+      extended?.kind === "perpendicular"
+        ? {
+            ...extended,
+            marker: perpendicularMarkerAt(pointer, extended, zoom),
+          }
+        : extended;
     perpendicularPreviewRef.current = next;
     setPerpendicularPreview(next);
     return next;
@@ -443,20 +433,6 @@ export function CurrentCanvas(p: Props) {
         e.id === id ? { ...e, ...update } : e,
       ),
     }));
-  const replaceElement = (next: DiagramElement) => patch(next.id, next);
-  const addVertex = (e: DiagramElement, segment: number) => {
-    p.onBegin();
-    replaceElement(addLineVertex(e, segment));
-    p.onEnd();
-    setVertexSelection({ id: e.id, index: segment + 1 });
-  };
-  const removeVertex = (e: DiagramElement, index: number) => {
-    if (lineVertices(e).length <= 2) return;
-    p.onBegin();
-    replaceElement(removeLineVertex(e, index));
-    p.onEnd();
-    setVertexSelection(null);
-  };
   const updateText = (e: DiagramElement, text: string) => {
     const revision = ++textRevision.current;
     patch(e.id, { text });
@@ -526,19 +502,6 @@ export function CurrentCanvas(p: Props) {
       if (event.code === "Space") {
         space.current = true;
         event.preventDefault();
-      }
-      if (
-        (event.key === "Delete" || event.key === "Backspace") &&
-        vertexSelection &&
-        single &&
-        single.id === vertexSelection.id &&
-        ["line", "curve"].includes(single.type) &&
-        lineVertices(single).length > 2
-      ) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        removeVertex(single, vertexSelection.index);
-        return;
       }
       if (event.key === "Escape") {
         snappedTarget.current = null;
@@ -621,7 +584,6 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     if (tool === "select") {
-      setVertexSelection(null);
       if (!event.shiftKey) p.onSelect([]);
       begin(event, {
         kind: "marquee",
@@ -710,7 +672,6 @@ export function CurrentCanvas(p: Props) {
       closeEdit();
       return;
     }
-    if (vertexSelection?.id !== e.id) setVertexSelection(null);
     const group = e.groupId
       ? elements.filter((n) => n.groupId === e.groupId).map((n) => n.id)
       : [e.id];
@@ -794,6 +755,7 @@ export function CurrentCanvas(p: Props) {
     }
     if (g.kind === "freehand") {
       if (
+        g.points.length < 5000 &&
         Math.hypot(
           q.x - g.points[g.points.length - 1].x,
           q.y - g.points[g.points.length - 1].y,
@@ -937,6 +899,7 @@ export function CurrentCanvas(p: Props) {
           g.box,
           { x, y, width: w, height: h },
           g.local,
+          { altKey: event.altKey },
         ).map((e) => [e.id, e]),
       );
       p.onReplace((doc) => ({
@@ -969,7 +932,9 @@ export function CurrentCanvas(p: Props) {
     if (g.kind === "endpoint") {
       patch(
         g.original.id,
-        moveLineEndpoint(g.original, g.index, snap(q, [g.original.id])),
+        moveLineEndpoint(g.original, g.index, snap(q, [g.original.id]), {
+          altKey: event.altKey,
+        }),
       );
       return;
     }
@@ -1363,7 +1328,7 @@ export function CurrentCanvas(p: Props) {
                         stroke="#2f9e5b"
                         strokeWidth={1.7 / zoom}
                       />
-                      {perpendicularPreview.mode === "angle-bisector" &&
+                      {perpendicularPreview.kind === "angle-bisector" &&
                         perpendicularPreview.secondTarget && (
                           <path
                             d={`M${perpendicularPreview.secondTarget.a.x} ${perpendicularPreview.secondTarget.a.y}L${perpendicularPreview.secondTarget.b.x} ${perpendicularPreview.secondTarget.b.y}`}
@@ -1372,7 +1337,7 @@ export function CurrentCanvas(p: Props) {
                             strokeWidth={1.2 / zoom}
                           />
                         )}
-                      {perpendicularPreview.mode !== "angle-bisector" &&
+                      {perpendicularPreview.kind === "perpendicular" &&
                         RIGHT_ANGLE_MARKERS.map((marker) => {
                           const active = perpendicularPreview.marker === marker;
                           return (
@@ -1547,7 +1512,10 @@ export function CurrentCanvas(p: Props) {
                   LINE_TYPES.has(single.type) &&
                   !single.boxed &&
                   !single.locked ? (
-                    <g transform={elementTransform(single)}>
+                    <g
+                      transform={elementTransform(single)}
+                      data-line-handles
+                    >
                       {isCurve(single) &&
                         (!single.points || single.points.length === 2) &&
                         curveControls(single).map((pt, i) => (
@@ -1575,42 +1543,8 @@ export function CurrentCanvas(p: Props) {
                             />
                           </g>
                         ))}
-                      {["line", "curve"].includes(single.type) &&
-                        lineVertices(single)
-                          .slice(0, -1)
-                          .map((_, i) => {
-                            const q = lineSegmentPoint(single, i, 0.5);
-                            return (
-                              <g
-                                key={`add-${i}`}
-                                transform={`translate(${q.x} ${q.y}) scale(${1 / zoom})`}
-                                className="vertex-add-handle"
-                                onPointerDown={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  addVertex(single, i);
-                                }}
-                              >
-                                <title>Thêm đỉnh</title>
-                                <circle
-                                  r="5"
-                                  fill="white"
-                                  stroke="#3c8fca"
-                                  strokeWidth="1"
-                                />
-                                <path
-                                  d="M-2.5 0H2.5M0 -2.5V2.5"
-                                  stroke="#3c8fca"
-                                  strokeWidth="1"
-                                />
-                              </g>
-                            );
-                          })}
                       {lineVertices(single).map((q, i, vertices) => {
-                        const endpoint = i === 0 || i === vertices.length - 1,
-                          active =
-                            vertexSelection?.id === single.id &&
-                            vertexSelection.index === i;
+                        const endpoint = i === 0 || i === vertices.length - 1;
                         return (
                           <g key={`vertex-${i}`}>
                             <rect
@@ -1619,18 +1553,11 @@ export function CurrentCanvas(p: Props) {
                               width={handle}
                               height={handle}
                               rx={endpoint ? 0 : handle / 2}
-                              fill={
-                                active
-                                  ? "#e7b34f"
-                                  : endpoint
-                                    ? "#66af73"
-                                    : "#e7c476"
-                              }
-                              stroke={active ? "#9b6b10" : "white"}
+                              fill={endpoint ? "#66af73" : "#e7c476"}
+                              stroke="white"
                               strokeWidth={0.7 / zoom}
                               className="control-handle"
                               onPointerDown={(event) => {
-                                setVertexSelection({ id: single.id, index: i });
                                 begin(event, {
                                   kind: endpoint ? "endpoint" : "point",
                                   original: single,
@@ -1642,32 +1569,6 @@ export function CurrentCanvas(p: Props) {
                                 {endpoint ? "Kéo đầu mút" : "Kéo đỉnh"}
                               </title>
                             </rect>
-                            {active &&
-                              ["line", "curve"].includes(single.type) &&
-                              vertices.length > 2 && (
-                                <g
-                                  transform={`translate(${q.x + 12 / zoom} ${q.y - 12 / zoom}) scale(${1 / zoom})`}
-                                  className="vertex-remove-handle"
-                                  onPointerDown={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    removeVertex(single, i);
-                                  }}
-                                >
-                                  <title>Xóa đỉnh</title>
-                                  <circle
-                                    r="6"
-                                    fill="#e34b4b"
-                                    stroke="white"
-                                    strokeWidth="1"
-                                  />
-                                  <path
-                                    d="M-2.5 -2.5L2.5 2.5M-2.5 2.5L2.5 -2.5"
-                                    stroke="white"
-                                    strokeWidth="1.2"
-                                  />
-                                </g>
-                              )}
                           </g>
                         );
                       })}

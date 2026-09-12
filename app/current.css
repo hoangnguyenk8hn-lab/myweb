@@ -882,16 +882,6 @@ kbd {
   line-height: 1.4;
   color: #666;
 }
-.vertex-add-handle,
-.vertex-remove-handle {
-  cursor: pointer;
-}
-.vertex-add-handle:hover circle {
-  fill: #e8f5ff;
-}
-.vertex-remove-handle:hover circle {
-  fill: #c92f2f;
-}
 .intersection-symbols button {
   width: 34px;
   height: 30px;

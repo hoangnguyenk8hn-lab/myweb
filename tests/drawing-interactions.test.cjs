@@ -20,13 +20,8 @@ const {
 const {
   drawElement,
   moveLineEndpoint,
-  addLineVertex,
   lineVertices,
-  lineSegmentPoint,
-  linePoint,
   moveLineVertex,
-  removeLineVertex,
-  linePath,
   curveControls,
   sceneBounds,
   worldPoint,
@@ -540,6 +535,20 @@ test("releasing an endpoint on an Intersection keeps the exact point instead of 
   }
 });
 
+test("legacy multi-point Line data remains movable without exposing add/remove vertex commands", () => {
+  const legacy = {
+    ...makeElement("line", 20, 30, 120, 80),
+    points: [
+      { x: 0, y: 0 },
+      { x: 0.5, y: 0.2 },
+      { x: 1, y: 1 },
+    ],
+  };
+  const moved = moveLineVertex(legacy, 1, { x: 90, y: 70 });
+  assert.equal(lineVertices(moved).length, 3);
+  near(lineVertices(moved)[1], { x: 90, y: 70 });
+});
+
 test("line and curve anchors follow their rendered endpoints and marker midpoint after transforms", () => {
   for (const type of ["line", "curve"])
     for (const rotation of [0, 47, -132]) {
@@ -727,96 +736,4 @@ test("snapping a rotated polygon vertex preserves all other vertices and endpoin
   );
   near(curvePoints(placed)[3], target.point);
   assert.equal(placed.toId, undefined);
-});
-
-test("Line vertices can be added, moved, snapped and removed without shifting the other points", () => {
-  const original = {
-    ...makeElement("line", 80, 60, 160, 90),
-    rotation: 37,
-    skewX: -16,
-  };
-  const before = lineVertices(original).map((p) => worldPoint(p, original));
-  const added = addLineVertex(original, 0);
-  assert.equal(lineVertices(added).length, 3);
-  near(worldPoint(lineVertices(added)[0], added), before[0]);
-  near(worldPoint(lineVertices(added)[1], added), {
-    x: (before[0].x + before[1].x) / 2,
-    y: (before[0].y + before[1].y) / 2,
-  });
-  near(worldPoint(lineVertices(added)[2], added), before[1]);
-
-  const target = { x: 310, y: 175 };
-  const moved = moveLineVertex(added, 1, target);
-  const movedWorld = lineVertices(moved).map((p) => worldPoint(p, moved));
-  near(movedWorld[0], before[0]);
-  near(movedWorld[1], target);
-  near(movedWorld[2], before[1]);
-  assert.equal(
-    objectSnapTargets(moved).filter((p) => p.kind === "vertex").length,
-    1,
-  );
-
-  const removed = removeLineVertex(moved, 1);
-  assert.equal(removed.points.length, 2);
-  assert.equal(lineVertices(removed).length, 2);
-  near(worldPoint(lineVertices(removed)[0], removed), before[0]);
-  near(worldPoint(lineVertices(removed)[1], removed), before[1]);
-});
-
-test("Curve vertices use the actual curve midpoint and restore the original Bezier after removal", () => {
-  const original = {
-    ...makeElement("curve", 40, 150, 220, -35),
-    rotation: -23,
-    skewX: 11,
-    control1: { x: 65, y: -95 },
-    control2: { x: 155, y: 70 },
-  };
-  const expected = worldPoint(curvePoint(original, 0.5), original);
-  const originalSamples = [0, 0.25, 0.5, 0.75, 1].map((t) =>
-    worldPoint(curvePoint(original, t), original),
-  );
-  const added = addLineVertex(original, 0);
-  assert.equal(lineVertices(added).length, 3);
-  near(worldPoint(lineVertices(added)[1], added), expected);
-  assert.match(linePath(added), /^M.*C/);
-  near(
-    worldPoint(lineSegmentPoint(added, 0, 0.5), added),
-    worldPoint(linePoint(added, 0.25), added),
-  );
-
-  const restored = removeLineVertex(added, 1);
-  assert.equal(restored.points.length, 2);
-  const restoredSamples = [0, 0.25, 0.5, 0.75, 1].map((t) =>
-    worldPoint(linePoint(restored, t), restored),
-  );
-  restoredSamples.forEach((point, i) => near(point, originalSamples[i], 1e-6));
-});
-
-test("removing a Line or Curve endpoint keeps two usable vertices", () => {
-  for (const type of ["line", "curve"]) {
-    const original = makeElement(type, 10, 20, 180, 80);
-    const added = addLineVertex(addLineVertex(original, 0), 1);
-    assert.equal(lineVertices(added).length, 4);
-    for (const index of [0, 3]) {
-      const removed = removeLineVertex(added, index);
-      assert.equal(lineVertices(removed).length, 3);
-      assert.ok(Number.isFinite(sceneBounds(removed).width));
-      assert.ok(Number.isFinite(sceneBounds(removed).height));
-    }
-  }
-});
-
-test("Line and Curve vertex data round trips through JSON and rejects fewer than two points", () => {
-  for (const type of ["line", "curve"]) {
-    const edited = addLineVertex(makeElement(type, 20, 30, 140, 70), 0);
-    const document = { ...blankDocument(), elements: [edited] };
-    assert.ok(validDocument(JSON.parse(JSON.stringify(document))));
-    assert.equal(
-      validDocument({
-        ...document,
-        elements: [{ ...edited, points: [{ x: 0, y: 0 }] }],
-      }),
-      false,
-    );
-  }
 });

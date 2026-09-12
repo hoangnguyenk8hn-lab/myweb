@@ -11,7 +11,6 @@ import {
   worldBounds as baseWorldBounds,
   worldPoint,
 } from "./sceneGeometryBase";
-import { isAltModifierDown } from "./modifierState";
 
 export * from "./sceneGeometryBase";
 
@@ -46,12 +45,12 @@ export function resolveElement(
   e: DiagramElement,
   doc: DiagramDocument,
 ): DiagramElement {
-  const source = STATIC_GEOMETRY_LINES.has(e.type)
+  const source = STATIC_GEOMETRY_LINES.has(e.type) && (e.fromId || e.toId)
     ? { ...e, fromId: undefined, toId: undefined }
     : e;
   const resolved = baseResolveElement(source, doc);
   const shape = resolved.shape ?? resolved.type;
-  return CENTER_SELECTION_SHAPES.has(shape)
+  return CENTER_SELECTION_SHAPES.has(shape) && !resolved.boxed
     ? { ...resolved, boxed: true }
     : resolved;
 }
@@ -150,11 +149,12 @@ export function moveLineEndpoint(
   e: DiagramElement,
   index: number,
   target: Point,
+  modifiers: { altKey?: boolean } = {},
 ): DiagramElement {
   return baseMoveLineEndpoint(
     e,
     index,
-    isAltModifierDown()
+    modifiers.altKey
       ? projectEndpointToOriginalAxis(e, index, target)
       : target,
   );
@@ -187,12 +187,13 @@ export function resizeElements(
   from: Bounds,
   to: Bounds,
   local = elements.length === 1,
+  modifiers: { altKey?: boolean } = {},
 ): DiagramElement[] {
   if (elements.length === 1 && isPointElement(elements[0])) return elements;
   return baseResizeElements(
     elements,
     from,
-    isAltModifierDown() ? centerResizeBounds(from, to) : to,
+    modifiers.altKey ? centerResizeBounds(from, to) : to,
     local,
   );
 }

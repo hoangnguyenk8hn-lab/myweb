@@ -24,6 +24,12 @@ import {
   type Bounds,
 } from "./pathBounds";
 import { shapePath } from "./shapes";
+import {
+  segmentIntersection,
+  subtract,
+} from "./geometryKernel";
+
+export { segmentIntersection } from "./geometryKernel";
 
 export type IntersectionMark = {
   point: Point;
@@ -181,39 +187,6 @@ export function elementTouchesRect(e: DiagramElement, rect: Bounds): boolean {
       edges.some((edge) => segmentIntersection([from, to], edge)),
   );
 }
-const cross = (a: Point, b: Point) => a.x * b.y - a.y * b.x;
-const subtract = (a: Point, b: Point) => ({ x: a.x - b.x, y: a.y - b.y });
-/** Shared endpoints count once; coincident runs have no isolated crossing. */
-export function segmentIntersection(
-  [a, b]: Segment,
-  [c, d]: Segment,
-): Point | null {
-  const r = subtract(b, a),
-    s = subtract(d, c),
-    delta = subtract(c, a),
-    den = cross(r, s);
-  if (Math.abs(den) < 1e-10) {
-    const onSegment = (p: Point, [u, v]: Segment) =>
-      Math.abs(cross(subtract(p, u), subtract(v, u))) < 1e-8 &&
-      p.x >= Math.min(u.x, v.x) - 1e-8 &&
-      p.x <= Math.max(u.x, v.x) + 1e-8 &&
-      p.y >= Math.min(u.y, v.y) - 1e-8 &&
-      p.y <= Math.max(u.y, v.y) + 1e-8;
-    const shared: Point[] = [];
-    for (const p of [a, b, c, d])
-      if (
-        onSegment(p, [a, b]) &&
-        onSegment(p, [c, d]) &&
-        !shared.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-8)
-      )
-        shared.push(p);
-    return shared.length === 1 ? shared[0] : null;
-  }
-  const t = cross(delta, s) / den,
-    u = cross(delta, r) / den;
-  if (t < -1e-8 || t > 1 + 1e-8 || u < -1e-8 || u > 1 + 1e-8) return null;
-  return { x: a.x + t * r.x, y: a.y + t * r.y };
-}
 function overlaps(a: Bounds, b: Bounds) {
   return (
     a.x <= b.x + b.width + 1e-8 &&
@@ -318,10 +291,14 @@ export function contourIntersections(
   if (eb)
     return elementSegments(a).flatMap((segment) => ellipseSegment(eb, segment));
   const result: Point[] = [],
-    segments = elementSegments(b).map((s) => ({ s, b: segBox(s) }));
+    segments = elementSegments(b)
+      .map((s) => ({ s, b: segBox(s) }))
+      .sort((left, right) => left.b.x - right.b.x);
   for (const s of elementSegments(a)) {
     const box = segBox(s);
     for (const n of segments) {
+      if (n.b.x > box.x + box.width + 1e-8) break;
+      if (n.b.x + n.b.width < box.x - 1e-8) continue;
       if (!overlaps(box, n.b)) continue;
       const p = segmentIntersection(s, n.s);
       if (p) result.push(p);

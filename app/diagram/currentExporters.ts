@@ -1,4 +1,9 @@
-import type { DiagramDocument, DiagramElement } from "./types";
+import {
+  CURRENT_DOCUMENT_VERSION,
+  isElementType,
+  type DiagramDocument,
+  type DiagramElement,
+} from "./types";
 import {
   TEXT_TYPES,
   LINE_TYPES,
@@ -9,6 +14,12 @@ import {
 import { parseColor } from "./colorModel";
 import { collectIntersections, intersectionAppearance } from "./intersections";
 import { RIGHT_ANGLE_MARKERS } from "./lineMarkers";
+import { migrateDocument } from "./documentMigration";
+import {
+  externalizeDocumentImages,
+  portableDocument,
+  resolveImageAsset,
+} from "./imageAssets";
 
 export interface ImageOptions {
   format: "png" | "jpeg" | "svg";
@@ -32,18 +43,29 @@ export function download(blob: Blob, filename: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
-export function downloadJson(data: DiagramDocument) {
+export async function downloadJson(data: DiagramDocument) {
+  const portable = await portableDocument(data);
   download(
-    new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+    new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" }),
     "drawing.json",
   );
 }
-export function svgString(
+export async function svgString(
   source: SVGSVGElement,
   data: DiagramDocument,
   options: ImageOptions = DEFAULT_IMAGE_OPTIONS,
 ) {
   const clone = source.cloneNode(true) as SVGSVGElement;
+  await Promise.all(
+    Array.from(clone.querySelectorAll<SVGImageElement>("image[data-image-asset]")).map(
+      async (image) => {
+        const reference = image.dataset.imageAsset;
+        const href = await resolveImageAsset(reference);
+        if (href) image.setAttribute("href", href);
+        image.removeAttribute("data-image-asset");
+      },
+    ),
+  );
   clone
     .querySelectorAll("[data-ui],[data-hit-area],.selection-layer")
     .forEach((n) => n.remove());
@@ -67,7 +89,7 @@ export async function exportImage(
   data: DiagramDocument,
   options: ImageOptions,
 ) {
-  const svg = svgString(source, data, options);
+  const svg = await svgString(source, data, options);
   if (options.format === "svg") {
     download(
       new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
@@ -115,43 +137,11 @@ const finite = (n: unknown) =>
 const colors = (v: unknown) =>
   typeof v === "string" &&
   /^(#[\da-f]{3,8}|transparent|none|black|white|rgba?\([\d\s.,%]+\))$/i.test(v);
-const types = new Set([
-  "text",
-  "plain-text",
-  "boxed-text",
-  "line",
-  "arrow",
-  "curve",
-  "curved-arrow",
-  "shape",
-  "polyline",
-  "polycurve",
-  "freehand",
-  "image",
-  "plot",
-  "ellipse",
-  "circle",
-  "arc",
-  "rectangle",
-  "square",
-  "triangle",
-  "diamond",
-  "polygon",
-  "axis",
-  "wave",
-  "quadratic",
-  "cubic",
-  "brace",
-  "cross",
-  "target",
-  "arrow-head",
-  "double-arrow-head",
-]);
 export function validDocument(value: unknown): value is DiagramDocument {
   if (!value || typeof value !== "object") return false;
   const d = value as DiagramDocument;
   if (
-    d.version !== 1 ||
+    d.version !== CURRENT_DOCUMENT_VERSION ||
     !finite(d.width) ||
     !finite(d.height) ||
     d.width < 50 ||
@@ -166,17 +156,18 @@ export function validDocument(value: unknown): value is DiagramDocument {
       (v) => typeof v === "boolean",
     ) ||
     !Array.isArray(d.elements) ||
-    d.elements.length > 5000
+    d.elements.length > 1500
   )
     return false;
   const ids = new Set<string>();
+  let pointCount = 0;
   return d.elements.every((e: DiagramElement) => {
     if (
       !e ||
       typeof e.id !== "string" ||
       !e.id ||
       ids.has(e.id) ||
-      !types.has(e.type) ||
+      !isElementType(e.type) ||
       ![e.x, e.y, e.width, e.height, e.rotation].every(finite) ||
       !e.style ||
       !colors(e.style.stroke) ||
@@ -220,7 +211,7 @@ export function validDocument(value: unknown): value is DiagramDocument {
     if (
       e.intersectionWith !== undefined &&
       (!Array.isArray(e.intersectionWith) ||
-        e.intersectionWith.length > 5000 ||
+        e.intersectionWith.length > 1500 ||
         e.intersectionWith.some((id) => typeof id !== "string" || !id))
     )
       return false;
@@ -301,17 +292,17 @@ export function validDocument(value: unknown): value is DiagramDocument {
     if (
       e.points &&
       (!Array.isArray(e.points) ||
-        e.points.length > 25000 ||
+        e.points.length > 5000 ||
         e.points.some((p) => !p || !finite(p.x) || !finite(p.y)))
     )
       return false;
+    pointCount += e.points?.length ?? 0;
+    if (pointCount > 100_000) return false;
     if (LINE_TYPES.has(e.type) && e.points && e.points.length < 2) return false;
     if (
       e.type === "image" &&
       (typeof e.imageHref !== "string" ||
-        !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(
-          e.imageHref,
-        ))
+        !/^asset:[a-zA-Z0-9_-]+$/.test(e.imageHref))
     )
       return false;
     if (e.plot) {
@@ -338,9 +329,21 @@ export function validDocument(value: unknown): value is DiagramDocument {
         s.data.some((p) => !p || !finite(p.x) || !finite(p.y))
       )
         return false;
+      pointCount += s.data.length;
+      if (pointCount > 100_000) return false;
     }
     return true;
   });
+}
+
+/** Migrate, externalize large assets, then validate one untrusted document. */
+export async function loadDocument(
+  value: unknown,
+): Promise<DiagramDocument | null> {
+  const migrated = migrateDocument(value);
+  if (!migrated) return null;
+  const externalized = await externalizeDocumentImages(migrated);
+  return validDocument(externalized) ? externalized : null;
 }
 
 const n = (v: number) => String(+v.toFixed(2));

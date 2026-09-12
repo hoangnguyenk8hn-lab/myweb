@@ -21,9 +21,10 @@ import {
   downloadJson,
   exportImage,
   latexDocument,
-  validDocument,
+  loadDocument,
   type ImageOptions,
 } from "./currentExporters";
+import { storeImageAsset } from "./imageAssets";
 import { DEFAULT_PLOT } from "./plotting";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
 import {
@@ -33,7 +34,6 @@ import {
   TEXT_TYPES,
 } from "./sceneGeometry";
 import type {
-  DiagramDocument,
   DiagramElement,
   DiagramTool,
   ElementStyle,
@@ -121,22 +121,30 @@ export function CurrentDiagramEditor() {
     messageTimer.current = setTimeout(() => setMessage(""), 4500);
   };
   useEffect(() => {
-    try {
-      const saved =
-        localStorage.getItem(CURRENT_STORAGE_KEY) ??
-        localStorage.getItem("diagram-draw-rebuilt-document-v1");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (validDocument(parsed)) history.load(parsed);
-        else
-          setMessage(
-            "The saved drawing could not be opened. Use Open JSON to recover a backup.",
-          );
+    let active = true;
+    void (async () => {
+      try {
+        const saved =
+          localStorage.getItem(CURRENT_STORAGE_KEY) ??
+          localStorage.getItem("diagram-draw-current-v2") ??
+          localStorage.getItem("diagram-draw-rebuilt-document-v1");
+        if (saved) {
+          const parsed = await loadDocument(JSON.parse(saved));
+          if (parsed) history.load(parsed);
+          else if (active)
+            setMessage(
+              "The saved drawing could not be opened. Use Open JSON to recover a backup.",
+            );
+        }
+      } catch {
+        if (active) setSaveState("Save unavailable");
+      } finally {
+        if (active) setHydrated(true);
       }
-    } catch {
-      setSaveState("Save unavailable");
-    }
-    setHydrated(true);
+    })();
+    return () => {
+      active = false;
+    };
   }, [history.load]);
   useEffect(() => {
     if (!hydrated || history.inGesture) return;
@@ -413,7 +421,11 @@ export function CurrentDiagramEditor() {
         fileInput.current?.click();
         break;
       case "json":
-        downloadJson(d);
+        void downloadJson(d)
+          .then(() => report("JSON exported"))
+          .catch((error) =>
+            report(error instanceof Error ? error.message : "JSON export failed."),
+          );
         break;
       case "image-export":
         setDialog("image");
@@ -465,18 +477,17 @@ export function CurrentDiagramEditor() {
       return;
     }
     try {
-      const href = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const previewUrl = URL.createObjectURL(file);
       const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-        img.src = href;
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = previewUrl;
+        });
+      } finally {
+        URL.revokeObjectURL(previewUrl);
+      }
       const scale = Math.min(
         1,
         (d.width - 40) / img.naturalWidth,
@@ -489,7 +500,7 @@ export function CurrentDiagramEditor() {
         img.naturalWidth * scale,
         img.naturalHeight * scale,
       );
-      e.imageHref = href;
+      e.imageHref = await storeImageAsset(file);
       history.commit((doc) => ({ ...doc, elements: [...doc.elements, e] }));
       setSelectedIds([e.id]);
       setTool("select");
@@ -615,7 +626,15 @@ export function CurrentDiagramEditor() {
             {d.elements.length} objects · {d.width} × {d.height} px
           </p>
           <button onClick={() => setClosed(false)}>Edit Drawing</button>
-          <button onClick={() => downloadJson(d)}>Save JSON</button>
+          <button
+            onClick={() =>
+              void downloadJson(d).catch((error) =>
+                report(error instanceof Error ? error.message : "JSON export failed."),
+              )
+            }
+          >
+            Save JSON
+          </button>
         </section>
       ) : (
         <section className="drawing-window" aria-label="Drawing editor">
@@ -836,8 +855,8 @@ export function CurrentDiagramEditor() {
           try {
             if (file.size > 35 * 1024 * 1024)
               throw new Error("The file is too large.");
-            const parsed: unknown = JSON.parse(await file.text());
-            if (!validDocument(parsed))
+            const parsed = await loadDocument(JSON.parse(await file.text()));
+            if (!parsed)
               throw new Error("This file is not a supported drawing JSON.");
             history.commit(parsed);
             setSelectedIds([]);

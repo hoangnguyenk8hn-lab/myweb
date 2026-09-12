@@ -1,5 +1,5 @@
 "use client";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ArrowHead, DiagramElement } from "./types";
 import { SHAPE_MAP, shapePath } from "./shapes";
 import {
@@ -24,6 +24,7 @@ import {
   isRightAngleMarker,
   rightAngleDecorationPath,
 } from "./lineMarkers";
+import { resolveImageAsset } from "./imageAssets";
 
 export function MarkerGlyph({
   type,
@@ -83,6 +84,26 @@ export function SceneElement({
   onDoubleClick?: (element: DiagramElement) => void;
   interactive?: boolean;
 }) {
+  const [resolvedImageHref, setResolvedImageHref] = useState<string | null>(
+    e.type === "image" && e.imageHref?.startsWith("data:") ? e.imageHref : null,
+  );
+  useEffect(() => {
+    let active = true;
+    if (e.type !== "image") {
+      setResolvedImageHref(null);
+      return;
+    }
+    void resolveImageAsset(e.imageHref)
+      .then((href) => {
+        if (active) setResolvedImageHref(href);
+      })
+      .catch(() => {
+        if (active) setResolvedImageHref(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [e.type, e.imageHref]);
   const s = e.style,
     c = center(e),
     b = sceneBounds(e),
@@ -334,7 +355,8 @@ export function SceneElement({
   } else if (e.type === "image")
     content = (
       <image
-        href={e.imageHref}
+        href={resolvedImageHref ?? undefined}
+        data-image-asset={e.imageHref}
         x={e.x}
         y={e.y}
         width={e.width}

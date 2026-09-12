@@ -191,16 +191,6 @@ export function linePoint(e: DiagramElement, t: number): Point {
   return lineSegmentPoint(e, index, scaled - index);
 }
 
-export function addLineVertex(
-  e: DiagramElement,
-  segment: number,
-): DiagramElement {
-  const points = lineVertices(e),
-    point = lineSegmentPoint(e, segment, 0.5);
-  points.splice(segment + 1, 0, point);
-  return fitLineVertices(e, points);
-}
-
 export function moveLineVertex(
   e: DiagramElement,
   index: number,
@@ -223,31 +213,6 @@ export function moveLineVertex(
   const next = fitLineVertices(staged, points);
   if (index === 0) next.fromId = undefined;
   if (index === points.length - 1) next.toId = undefined;
-  return next;
-}
-
-export function removeLineVertex(
-  e: DiagramElement,
-  index: number,
-): DiagramElement {
-  const points = lineVertices(e);
-  if (points.length <= 2 || index < 0 || index >= points.length) return e;
-  let staged = e;
-  if (isCurve(e) && (index === 0 || index === points.length - 1)) {
-    const replacement = index === 0 ? points[1] : points[points.length - 2],
-      removed = points[index],
-      dx = replacement.x - removed.x,
-      dy = replacement.y - removed.y,
-      [a, b] = curveControls(e);
-    staged =
-      index === 0
-        ? { ...e, control1: { x: a.x + dx, y: a.y + dy }, control2: b }
-        : { ...e, control1: a, control2: { x: b.x + dx, y: b.y + dy } };
-  }
-  points.splice(index, 1);
-  const next = fitLineVertices(staged, points);
-  if (index === 0) next.fromId = undefined;
-  if (index === points.length) next.toId = undefined;
   return next;
 }
 

@@ -12,14 +12,6 @@
   opacity: 0.5;
 }
 
-/* Vertex insertion is disabled editor-wide. Existing endpoints/vertices remain
- * editable so older Line/Polyline/Polycurve geometry is not damaged, but the
- * midpoint "+" affordance can no longer add a new vertex to any object. */
-.selection-layer .vertex-add-handle {
-  display: none !important;
-  pointer-events: none !important;
-}
-
 /* Selection bounding boxes, resize handles and rotate chrome at ~50% opacity. */
 .selection-layer rect[stroke="#70b37f"],
 .selection-layer circle[stroke="#70b37f"],
@@ -30,10 +22,8 @@
   opacity: 0.5;
 }
 
-/* Line/Curve endpoint selection handles at 50% opacity.
- * The hidden add-vertex handle remains a structural selector hook for editable
- * Line and Curve selections, so Arrow/Curved Arrow endpoint chrome is unchanged. */
-.selection-layer g:has(> .vertex-add-handle) > g > rect.control-handle[rx="0"] {
+/* Line/Curve endpoint selection handles at 50% opacity. */
+.selection-layer [data-line-handles] rect.control-handle[rx="0"] {
   opacity: 0.5;
 }
 

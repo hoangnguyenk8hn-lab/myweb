@@ -29,12 +29,18 @@ Khi kéo hình, canvas cập nhật tọa độ trong tài liệu. Bộ history 
 | Thành phần                    | Trách nhiệm                                        |
 | ----------------------------- | -------------------------------------------------- |
 | currentDocument.ts            | Tạo trang trắng, đối tượng và ví dụ                |
-| types.ts                      | Khai báo kiểu TypeScript của dữ liệu               |
+| types.ts                      | Registry duy nhất và kiểu TypeScript của dữ liệu   |
+| documentMigration.ts          | Nâng schema JSON cũ lên version hiện tại           |
+| imageAssets.ts                | Lưu binary ảnh ở IndexedDB, tạo JSON portable      |
 | shapes.ts                     | Định nghĩa SVG và danh sách hình được hiển thị     |
 | CurrentToolPalette.tsx        | Các nhóm công cụ bên trái                          |
 | CurrentCanvasCore.tsx         | Nguồn duy nhất của pointer events, snap và tay nắm |
 | CurrentCanvas.tsx             | Entry point tương thích ngược                       |
 | sceneGeometry.ts              | Tọa độ, Bézier, điểm nối, biến đổi                 |
+| geometryKernel.ts             | Primitive/tolerance hình học dùng chung            |
+| assistedLine.ts               | Dispatcher construction đường thẳng               |
+| perpendicular.ts             | Logic riêng của đường vuông góc                    |
+| angleBisector.ts              | Logic riêng của phân giác                          |
 | pathBounds.ts                 | Cực trị đường SVG để tính khung chọn đúng với hình |
 | SceneElement.tsx              | Render hình, nhãn, đường và marker                 |
 | MathInput.tsx                 | Bộ nhập công thức MathLive                         |
@@ -75,7 +81,7 @@ Ví dụ đổi sidebar thành 300px:
 
 ```ts
 return {
-  version: 1,
+  version: 2,
   width: 900,
   height: 500,
   grid: {
@@ -245,15 +251,15 @@ Công thức:
 
 ## 10. Lưu và xuất
 
-- JSON: dữ liệu gốc, dùng để mở/sửa lại.
+- JSON: dữ liệu portable, dùng để mở/sửa lại; binary ảnh được nhúng khi export.
 - SVG: hình vector, công thức được chuyển thành path để không phụ thuộc font bên ngoài.
 - PNG/JPEG: raster từ SVG; tỉ lệ 1–4×.
 - TikZ: đường bao lấy mẫu từ SVG đang hiển thị; nhãn toán giữ nguyên LaTeX.
 - `latexDocument()` tạo file standalone cho XeLaTeX. Để chèn vào dự án LaTeX có sẵn, chỉ sao chép phần `tikzpicture`; dự án cần các gói TikZ và AMS tương ứng.
-- Ảnh chèn hiện đi cùng JSON/SVG/PNG, chưa được đóng gói trong .tex.
+- Ảnh chèn dùng `asset:<id>` trong document/history/localStorage và binary nằm ở IndexedDB. Nhờ vậy autosave không nhân base64 qua mỗi snapshot. Khi xuất JSON/SVG/PNG, ảnh được resolve/nhúng lại; ảnh chưa được đóng gói trong `.tex`.
 - Mọi tay nắm phải gắn `data-ui`, mọi vùng bắt chuột phải gắn `data-hit-area` để bị loại khỏi ảnh xuất.
 
-Không thay `version` của JSON nếu thay đổi vẫn tương thích. Với thay đổi phá vỡ dữ liệu cũ, viết hàm chuyển đổi rồi mới tăng version.
+Không thay `version` của JSON nếu thay đổi vẫn tương thích. Với thay đổi phá vỡ dữ liệu cũ, thêm một bước tuần tự vào `MIGRATIONS` trong `documentMigration.ts`, viết test mở version cũ, rồi mới tăng `CURRENT_DOCUMENT_VERSION`. Không kiểm tra version rải rác trong UI.
 
 ## 11. Kiểm tra sau khi sửa
 
@@ -263,13 +269,13 @@ Khung chọn đơn dùng `sceneBounds()` trong hệ tọa độ của hình; ch�
 
 `boxed` chỉ thay kiểu tay nắm khi chọn Line/Curve; không thêm hình chữ nhật vào bản vẽ hay ảnh xuất. Các trường `startMarkerSize`, `endMarkerSize`, `midMarkerSize` dùng khoảng 0.1–2 cho độ dày danh nghĩa của ký hiệu; renderer co giãn ký hiệu 10 đơn vị tương ứng. Trường `markerSize` cũ vẫn được đọc để giữ hình thức của JSON đã lưu.
 
-Line/Curve dùng `points` khi đã bật chỉnh nhiều vertex. `lineVertices()` trả về hai đầu mút cũ nếu `points` chưa có, nên JSON cũ vẫn hoạt động. `addLineVertex()` chèn đúng điểm giữa của đoạn đang hiển thị; với Bézier hai đầu mút, điểm mới là giá trị tại t=0.5 chứ không phải trung điểm của khung. `moveLineVertex()` và `removeLineVertex()` dựng lại hệ tọa độ chuẩn hóa, bù tâm xoay/nghiêng, giữ các vertex còn lại tại đúng vị trí canvas và tách liên kết đầu mút khi chính đầu đó bị sửa. Curve nhiều vertex dùng Catmull–Rom đổi sang các đoạn cubic Bézier mở; curve còn hai vertex tiếp tục dùng `control1` và `control2`. `linePoint()` dùng chung cho marker Middle, break và hướng marker.
-
-Trong `CurrentCanvasCore.tsx`, dấu cộng ở giữa mỗi đoạn gọi `addLineVertex()`. Nút đỉnh gọi gesture `point` hoặc `endpoint`; vertex đang chọn hiện nút xóa đỏ và Delete/Backspace chỉ xóa vertex đó khi đường còn hơn hai vertex. Mỗi thao tác thêm, xóa hoặc kéo vertex là một bước undo/redo. Khi `boxed` bật, các nút vertex được ẩn và khung resize/xoay hoạt động như trước.
+Line/Curve mới chỉ có hai đầu mút; editor không còn DOM/hàm thêm–xóa vertex ẩn. `lineVertices()` vẫn đọc dữ liệu nhiều điểm từ file cũ để không làm hỏng hình đã lưu, và các điểm cũ vẫn kéo được. Muốn tạo đường nhiều đỉnh mới, dùng Polyline/Polycurve; không đưa lại nút Add Vertex vào Line/Curve.
 
 `style.fillPaint` là kiểu phân biệt `gradient` hoặc `pattern`; `style.fill` là màu Basic. Khi thêm kiểu tô mới, cập nhật `types.ts`, `ColorPicker.tsx`, `PaintDefinition.tsx` và `validDocument()`. Bảng màu và thanh Size gom một lần kéo thành một bước undo bằng gesture của toolbar.
 
 Giao điểm sử dụng `contourIntersections()` và các contour từ `svgPathSegments()` trong cùng bộ đọc đường SVG với bounds. Line–ellipse giải phương trình bậc hai trong hệ tọa độ ellipse, kể cả xoay/nghiêng; hai circle dùng phép giải hình học nên nhận cả tiếp xúc. Các cặp Bézier/arc khác được chia thích nghi với dung sai 0.05 đơn vị canvas. Các subpath không bị nối nhầm. Image/Text/Plot dùng khung đối tượng; có thể mở rộng `elementSegments()` nếu muốn bắt giao điểm của riêng dữ liệu plot.
+
+`collectIntersections()` dùng broad-phase theo trục X ở cấp object; `contourIntersections()` tiếp tục sweep theo trục X ở cấp segment trước khi gọi kernel chính xác. `geometryKernel.ts` là nguồn duy nhất của `segmentIntersection`, `cross`, distance và projection; construction tool không được tự cài lại tolerance.
 
 Menu **Intersection** trên toolbar bật trường `intersection` của đối tượng, chọn kiểu dấu và điều chỉnh `intersectionMarkerSize` trong khoảng 0.1–2. Dấu mới dùng mặc định `DEFAULT_INTERSECTION_MARKER_SIZE = 0.4`. Thanh `SizeSlider` dùng chung với marker của Line/Curve. `intersectionAppearance()` chuyển kích cỡ thành bán kính và độ dày nét cho cả canvas lẫn TikZ; vẫn đọc `intersectionSize` từ JSON cũ và giữ nguyên giao diện cũ. Điểm giao được tính lại khi tài liệu thay đổi; SVG/PNG dùng lớp giao điểm đang hiển thị.
 
@@ -286,10 +292,13 @@ Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có tr
 ## 12. Quy tắc kiến trúc cho construction và snap
 
 - Mỗi construction là một `DiagramTool` có tên riêng, ví dụ `"perpendicular"` hoặc `"angle-bisector"`. Không dùng biến global hoặc cờ nằm ngoài React để ghi nhớ tool đang chọn.
+- Option/Alt phải đi trực tiếp từ pointer event vào hàm geometry qua tham số `modifiers`; không thêm listener module-global.
+- Mỗi construction có target/preview riêng. `assistedLine.ts` chỉ dispatch theo `kind`; không thêm mode-specific field vào `PerpendicularTarget`.
 - `CurrentCanvasCore.tsx` là chủ sở hữu duy nhất của chuỗi `pointerdown → preview → commit/cancel`. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
 - Mọi thao tác bắt điểm gọi `snapPointToScene()` trong `snapping.ts`. Hàm này quyết định thứ tự ưu tiên grid, khung đối tượng và anchor/intersection. Muốn thêm một loại điểm bắt, mở rộng `SnapTarget` và hàm này thay vì copy thuật toán vào tool mới.
 - Dấu vuông góc được lưu trong `rightAngle` với vị trí chuẩn hóa trên đường. `startHead`/`endHead` chỉ dành cho marker đầu đường. JSON cũ có right-angle trong `endHead` vẫn được render tương thích, nhưng mã mới phải ghi `rightAngle`.
 - Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, đặt dependency graph ở module dữ liệu thuần, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
+- Khi thêm element type persisted, thêm đúng một lần vào `ELEMENT_TYPES` trong `types.ts`; validator và `makeElement()` cùng dùng registry này. Palette/catalog chỉ chứa metadata UI, không sở hữu một allowed-type set khác.
 
 Trước khi thêm tool mới, thêm regression test geometry thuần vào `tests/` và chạy:
 

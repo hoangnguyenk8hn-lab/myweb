@@ -1,55 +1,61 @@
 export type Point = { x: number; y: number };
+export const CURRENT_DOCUMENT_VERSION = 2 as const;
+
+/** Runtime and TypeScript share this one persisted-element registry. */
+export const ELEMENT_TYPES = [
+  "point",
+  "plain-text",
+  "boxed-text",
+  "polyline",
+  "polycurve",
+  "freehand",
+  "image",
+  "plot",
+  "shape",
+  "text",
+  "line",
+  "arrow",
+  "curve",
+  "curved-arrow",
+  "ellipse",
+  "circle",
+  "arc",
+  "rectangle",
+  "square",
+  "triangle",
+  "diamond",
+  "polygon",
+  "axis",
+  "wave",
+  "quadratic",
+  "cubic",
+  "brace",
+  "cross",
+  "target",
+  "arrow-head",
+  "double-arrow-head",
+] as const;
+
+export type ElementType = (typeof ELEMENT_TYPES)[number];
+const ELEMENT_TYPE_SET: ReadonlySet<string> = new Set(ELEMENT_TYPES);
+export function isElementType(value: unknown): value is ElementType {
+  return typeof value === "string" && ELEMENT_TYPE_SET.has(value);
+}
+
+export const CONSTRUCTION_TOOLS = [
+  "tangent",
+  "perpendicular",
+  "angle-bisector",
+  "point-reflection",
+] as const;
+export type ConstructionTool = (typeof CONSTRUCTION_TOOLS)[number];
 
 export type DiagramTool =
+  | ElementType
   | `shape:${string}`
   | "select"
   | "hand"
-  | "tangent"
-  | "perpendicular"
-  | "angle-bisector"
-  | "point-reflection"
-  | "point"
-  | "plain-text"
-  | "boxed-text"
-  | "polyline"
-  | "polycurve"
-  | "freehand"
-  | "image"
-  | "plot"
-  | "shape"
-  | "text"
-  | "line"
-  | "arrow"
-  | "curve"
-  | "curved-arrow"
-  | "ellipse"
-  | "circle"
-  | "arc"
-  | "rectangle"
-  | "square"
-  | "triangle"
-  | "diamond"
-  | "polygon"
-  | "axis"
-  | "wave"
-  | "quadratic"
-  | "cubic"
-  | "brace"
-  | "cross"
-  | "target"
-  | "arrow-head"
-  | "double-arrow-head";
-
-export type ElementType = Exclude<
-  DiagramTool,
-  | "select"
-  | "hand"
-  | "tangent"
-  | "perpendicular"
-  | "angle-bisector"
-  | "point-reflection"
-  | `shape:${string}`
->;
+  | ConstructionTool;
 
 /**
  * A construction choice is a real editor tool, never an ambient module flag.
@@ -205,7 +211,7 @@ export interface GridSettings {
 }
 
 export interface DiagramDocument {
-  version: 1;
+  version: typeof CURRENT_DOCUMENT_VERSION;
   width: number;
   height: number;
   grid: GridSettings;
