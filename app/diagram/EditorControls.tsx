@@ -18,10 +18,7 @@ export function Dropdown({
   const root = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) {
-      setOffset(0);
-      return;
-    }
+    if (!open) return;
     const fit = () => {
       const x = root.current?.getBoundingClientRect().left ?? 0;
       const width = popover.current?.offsetWidth ?? 0;

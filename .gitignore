@@ -1,0 +1,19 @@
+# Dependencies
+/node_modules/
+
+# Framework and production build output
+/.next/
+/dist/
+/out/
+/.wrangler/
+
+# TypeScript and test output
+*.tsbuildinfo
+/coverage/
+next-env.d.ts
+
+# Local environment and logs
+.env*
+!.env.example
+*.log
+.DS_Store

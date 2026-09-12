@@ -94,6 +94,7 @@ export function ColorPanel({
     }
   }, [value]);
   useEffect(() => {
+    let loaded: string[] | null = null;
     try {
       const p = JSON.parse(localStorage.getItem(PRESET_KEY) ?? "null");
       if (
@@ -101,8 +102,12 @@ export function ColorPanel({
         p.length === 15 &&
         p.every((c) => /^#[\da-f]{6}$/i.test(c))
       )
-        setPresets(p);
+        loaded = p;
     } catch {}
+    if (!loaded) return;
+    const saved = loaded;
+    const frame = requestAnimationFrame(() => setPresets(saved));
+    return () => cancelAnimationFrame(frame);
   }, []);
   const change = (next: HSV) => {
     setHsv(next);
@@ -271,7 +276,12 @@ export function ColorControl({
   );
   const [stop, setStop] = useState<"from" | "to">("from"),
     [part, setPart] = useState<"foreground" | "background">("foreground");
-  useEffect(() => setTab(paint?.kind ?? "basic"), [paint?.kind]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() =>
+      setTab(paint?.kind ?? "basic"),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [paint?.kind]);
   const gradient: Extract<FillPaint, { kind: "gradient" }> =
     paint?.kind === "gradient"
       ? paint

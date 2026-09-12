@@ -212,7 +212,19 @@ function optionDragCopies(source: DiagramElement[]) {
   }));
 }
 export function CurrentCanvas(p: Props) {
-  const { document: d, tool, selectedIds, zoom } = p;
+  const {
+    document: d,
+    tool,
+    selectedIds,
+    zoom,
+    svgRef,
+    guides,
+    editId,
+    onBegin,
+    onCancel,
+    onEnd,
+    onEdit,
+  } = p;
   const viewport = useRef<HTMLDivElement>(null),
     gesture = useRef<Gesture | null>(null),
     space = useRef(false),
@@ -231,6 +243,7 @@ export function CurrentCanvas(p: Props) {
     [dragging, setDragging] = useState(false),
     [context, setContext] = useState<Point | null>(null),
     [polyPreview, setPolyPreview] = useState<Point | null>(null),
+    [polygonPoints, setPolygonPoints] = useState<Point[]>([]),
     [tangentStart, setTangentStart] = useState<Point | null>(null),
     [tangentPreview, setTangentPreview] = useState<TangentPreviewState | null>(
       null,
@@ -243,7 +256,7 @@ export function CurrentCanvas(p: Props) {
       useState<PointReflectionPreview | null>(null);
   const elements = useMemo(
     () => d.elements.map((e) => resolveElement(e, d)),
-    [d.elements],
+    [d],
   );
   const selected = elements.filter((e) => selectedIds.includes(e.id));
   const intersections = useMemo(
@@ -268,7 +281,10 @@ export function CurrentCanvas(p: Props) {
   const showSelectionCenter =
     !!single &&
     (singleShape === "circle" || single.textBorder === "circle" || !!single.boxed);
-  const edit = elements.find((e) => e.id === p.editId);
+  const edit = elements.find((e) => e.id === editId);
+  /* Construction previews intentionally mirror the active tool. The preview
+   * state is also used by pointer handlers, so it cannot be derived in render. */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (tool !== "tangent") {
       setTangentStart(null);
@@ -285,8 +301,9 @@ export function CurrentCanvas(p: Props) {
       setReflectionPreview(null);
     }
   }, [tool]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const pos = (event: { clientX: number; clientY: number }): Point => {
-    const svg = p.svgRef.current;
+    const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     const matrix = svg.getScreenCTM();
     if (!matrix) return { x: 0, y: 0 };
@@ -464,7 +481,7 @@ export function CurrentCanvas(p: Props) {
     }
   };
   const capture = (event: ReactPointerEvent) => {
-    p.svgRef.current?.setPointerCapture(event.pointerId);
+    svgRef.current?.setPointerCapture(event.pointerId);
     setDragging(true);
   };
   const begin = (event: ReactPointerEvent, g: Gesture) => {
@@ -476,7 +493,7 @@ export function CurrentCanvas(p: Props) {
     gestureTargets.current = snapTargets;
     snappedTarget.current = null;
     setSnapPoint(null);
-    if (g.kind !== "pan" && g.kind !== "marquee") p.onBegin();
+    if (g.kind !== "pan" && g.kind !== "marquee") onBegin();
     capture(event);
   };
   const finishPolygon = () => {
@@ -485,12 +502,13 @@ export function CurrentCanvas(p: Props) {
     snappedTarget.current = null;
     setSnapLines({});
     if (polygon.current.points.length < 3) {
-      p.onCancel();
+      onCancel();
     } else {
       patch(polygon.current.id, pointsBox(polygon.current.points));
       p.onEnd();
     }
     polygon.current = null;
+    setPolygonPoints([]);
     setPolyPreview(null);
     p.onTool("select");
   };
@@ -508,6 +526,7 @@ export function CurrentCanvas(p: Props) {
         setSnapPoint(null);
         gesture.current = null;
         polygon.current = null;
+        setPolygonPoints([]);
         setDragging(false);
         setMarquee(null);
         setPolyPreview(null);
@@ -521,7 +540,7 @@ export function CurrentCanvas(p: Props) {
         setReflectionPreview(null);
         disableGridSnapRef.current = false;
         setSnapLines({});
-        p.onCancel();
+        onCancel();
         setContext(null);
       }
       if (event.key === "Enter" && polygon.current) {
@@ -541,18 +560,20 @@ export function CurrentCanvas(p: Props) {
   });
   useEffect(() => {
     if (polygon.current && polygon.current.tool !== tool) {
-      p.onCancel();
+      onCancel();
       polygon.current = null;
+      setPolygonPoints([]);
       setPolyPreview(null);
     }
-  }, [tool, p.onCancel]);
+  }, [tool, onCancel]);
   useEffect(() => {
-    if (p.editId) p.onBegin();
-  }, [p.editId, p.onBegin]);
+    if (editId) onBegin();
+  }, [editId, onBegin]);
   const closeEdit = (cancel = false) => {
     textRevision.current++;
-    cancel ? p.onCancel() : p.onEnd();
-    p.onEdit(null);
+    if (cancel) onCancel();
+    else onEnd();
+    onEdit(null);
   };
   const targetNode = (point: Point, excluded: string[]) =>
     [...elements]
@@ -567,7 +588,7 @@ export function CurrentCanvas(p: Props) {
   const backgroundDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button === 2) return;
     setContext(null);
-    if (p.editId) {
+    if (editId) {
       closeEdit();
       return;
     }
@@ -627,6 +648,7 @@ export function CurrentCanvas(p: Props) {
           return;
         }
         polygon.current.points.push(point);
+        setPolygonPoints([...polygon.current.points]);
         patch(polygon.current.id, pointsBox(polygon.current.points));
       } else {
         const e = makeElement(tool, point.x, point.y, 1, 1);
@@ -634,6 +656,7 @@ export function CurrentCanvas(p: Props) {
         p.onBegin();
         p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, e] }));
         polygon.current = { id: e.id, points: [point], tool };
+        setPolygonPoints([point]);
         p.onSelect([e.id]);
       }
       return;
@@ -668,7 +691,7 @@ export function CurrentCanvas(p: Props) {
       if (!selectedIds.includes(e.id)) p.onSelect([e.id]);
       return;
     }
-    if (p.editId) {
+    if (editId) {
       closeEdit();
       return;
     }
@@ -709,7 +732,7 @@ export function CurrentCanvas(p: Props) {
     if (g && isSelectionHandleGesture(g))
       disableGridSnapRef.current = event.altKey;
     if (!g) {
-      if (tool !== "select" && tool !== "hand" && !p.editId)
+      if (tool !== "select" && tool !== "hand" && !editId)
         snap(constrain(raw), []);
       return;
     }
@@ -1072,8 +1095,8 @@ export function CurrentCanvas(p: Props) {
     setSnapPoint(null);
     setDragging(false);
     setSnapLines({});
-    if (p.svgRef.current?.hasPointerCapture(event.pointerId))
-      p.svgRef.current.releasePointerCapture(event.pointerId);
+    if (svgRef.current?.hasPointerCapture(event.pointerId))
+      svgRef.current.releasePointerCapture(event.pointerId);
   };
   const startConnect = (
     event: ReactPointerEvent,
@@ -1111,7 +1134,7 @@ export function CurrentCanvas(p: Props) {
             },
           });
         } else if (event.button === 0) {
-          if (p.editId) closeEdit();
+          if (editId) closeEdit();
           p.onSelect([]);
         }
       }}
@@ -1140,7 +1163,7 @@ export function CurrentCanvas(p: Props) {
           style={{ width: d.width * zoom, height: d.height * zoom }}
         >
           <svg
-            ref={p.svgRef}
+            ref={svgRef}
             xmlns="http://www.w3.org/2000/svg"
             width={d.width * zoom}
             height={d.height * zoom}
@@ -1151,7 +1174,7 @@ export function CurrentCanvas(p: Props) {
             onPointerDownCapture={() => {
               // Pointer gestures prevent the browser's default focus change.
               // Return keyboard shortcuts to the canvas after editing a field.
-              p.svgRef.current?.focus({ preventScroll: true });
+              svgRef.current?.focus({ preventScroll: true });
             }}
             onPointerDown={backgroundDown}
             onPointerMove={move}
@@ -1178,7 +1201,7 @@ export function CurrentCanvas(p: Props) {
               setReflectionPreview(null);
               disableGridSnapRef.current = false;
               setSnapLines({});
-              p.onCancel();
+              onCancel();
             }}
             onDoubleClick={() => {
               if (polygon.current) finishPolygon();
@@ -1447,7 +1470,7 @@ export function CurrentCanvas(p: Props) {
                   </text>
                 </g>
               )}
-              {p.guides && (
+              {guides && (
                 <g
                   stroke="#e5b543"
                   strokeWidth={0.7 / zoom}
@@ -1483,16 +1506,16 @@ export function CurrentCanvas(p: Props) {
                   strokeWidth={0.7 / zoom}
                 />
               )}
-              {polygon.current && polyPreview && (
+              {polygonPoints.length > 0 && polyPreview && (
                 <path
-                  d={`M${polygon.current.points.map((q) => `${q.x} ${q.y}`).join("L")}L${polyPreview.x} ${polyPreview.y}`}
+                  d={`M${polygonPoints.map((q) => `${q.x} ${q.y}`).join("L")}L${polyPreview.x} ${polyPreview.y}`}
                   fill="none"
                   stroke="#5ab175"
                   strokeDasharray="4 3"
                   strokeWidth={1 / zoom}
                 />
               )}
-              {box && !edit && !polygon.current && (
+              {box && !edit && polygonPoints.length === 0 && (
                 <>
                   {selected.length > 1 &&
                     selected.map((e) => (
@@ -1634,16 +1657,20 @@ export function CurrentCanvas(p: Props) {
                               height={handle}
                               fill="#69ae77"
                               style={{ cursor: `${name}-resize` }}
-                              onPointerDown={(event) =>
+                              onPointerDown={(event) => {
+                                // React's ref lint cannot follow that this helper
+                                // is invoked only after the pointer event fires.
+                                // eslint-disable-next-line react-hooks/refs
                                 begin(event, {
                                   kind: "resize",
                                   handle: name,
                                   box,
                                   local: !!single,
                                   originals: selected.filter((e) => !e.locked),
+                                  // eslint-disable-next-line react-hooks/refs
                                   start: pos(event),
-                                })
-                              }
+                                });
+                              }}
                             />
                           );
                         })}
@@ -1758,9 +1785,12 @@ export function CurrentCanvas(p: Props) {
                         key={i}
                         className="connection-handle"
                         transform={`translate(${q.x} ${q.y}) rotate(${q.r}) scale(${1 / zoom})`}
-                        onPointerDown={(event) =>
-                          startConnect(event, single, q)
-                        }
+                        onPointerDown={(event) => {
+                          // React's ref lint cannot follow that this helper
+                          // is invoked only after the pointer event fires.
+                          // eslint-disable-next-line react-hooks/refs
+                          startConnect(event, single, q);
+                        }}
                       >
                         <title>Drag to connect another object</title>
                         <rect

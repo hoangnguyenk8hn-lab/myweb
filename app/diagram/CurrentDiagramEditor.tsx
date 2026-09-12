@@ -84,9 +84,10 @@ function ZoomIcon({ minus = false }: { minus?: boolean }) {
   );
 }
 export function CurrentDiagramEditor() {
-  const initial = useMemo(blankDocument, []),
+  const initial = useMemo(() => blankDocument(), []),
     history = useCurrentHistory(initial),
     d = history.document;
+  const loadHistory = history.load;
   const [tool, setTool] = useState<DiagramTool>("select"),
     [selectedIds, setSelectedIds] = useState<string[]>([]),
     [zoom, setZoom] = useState(1),
@@ -106,12 +107,10 @@ export function CurrentDiagramEditor() {
     [sizeDraft, setSizeDraft] = useState({ width: 700, height: 400 });
   const svgRef = useRef<SVGSVGElement>(null),
     drawingMainRef = useRef<HTMLDivElement>(null),
-    drawingSizeRef = useRef({ width: d.width, height: d.height }),
     fileInput = useRef<HTMLInputElement>(null),
     imageInput = useRef<HTMLInputElement>(null),
     clipboard = useRef<DiagramElement[]>([]),
     messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  drawingSizeRef.current = { width: d.width, height: d.height };
   const selected = d.elements
     .filter((e) => selectedIds.includes(e.id))
     .map((e) => resolveElement(e, d));
@@ -130,7 +129,7 @@ export function CurrentDiagramEditor() {
           localStorage.getItem("diagram-draw-rebuilt-document-v1");
         if (saved) {
           const parsed = await loadDocument(JSON.parse(saved));
-          if (parsed) history.load(parsed);
+          if (parsed) loadHistory(parsed);
           else if (active)
             setMessage(
               "The saved drawing could not be opened. Use Open JSON to recover a backup.",
@@ -145,15 +144,17 @@ export function CurrentDiagramEditor() {
     return () => {
       active = false;
     };
-  }, [history.load]);
+  }, [loadHistory]);
   useEffect(() => {
     if (!hydrated || history.inGesture) return;
+    let nextState = "Saved";
     try {
       localStorage.setItem(CURRENT_STORAGE_KEY, JSON.stringify(d));
-      setSaveState("Saved");
     } catch {
-      setSaveState("Save failed");
+      nextState = "Save failed";
     }
+    const frame = requestAnimationFrame(() => setSaveState(nextState));
+    return () => cancelAnimationFrame(frame);
   }, [d, hydrated, history.inGesture]);
   useEffect(() => {
     if (!hydrated) return;
@@ -165,13 +166,12 @@ export function CurrentDiagramEditor() {
       frame = requestAnimationFrame(() => {
         const viewport = main.querySelector<HTMLElement>(".canvas-viewport");
         if (!viewport) return;
-        const size = drawingSizeRef.current;
         setZoom(
           fittedZoom(
             viewport.clientWidth,
             viewport.clientHeight,
-            size.width,
-            size.height,
+            d.width,
+            d.height,
           ),
         );
       });
@@ -183,7 +183,7 @@ export function CurrentDiagramEditor() {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [hydrated]);
+  }, [hydrated, d.width, d.height]);
   useEffect(
     () => () => {
       if (messageTimer.current) clearTimeout(messageTimer.current);

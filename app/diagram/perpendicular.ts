@@ -79,6 +79,8 @@ export function perpendicularLineForPointer(
   _previousEnd: Point | null = null,
   _zoom = 1,
 ): PerpendicularPreview {
+  void _previousEnd;
+  void _zoom;
   // Perpendicular construction always creates the exact segment PH. Pointer
   // movement around H is reserved exclusively for choosing the corner mark.
   return { ...preview, end: preview.foot };
