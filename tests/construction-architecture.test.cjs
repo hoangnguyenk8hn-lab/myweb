@@ -20,8 +20,8 @@ const {
   assistedLinePreview,
   assistedLineTargetAt,
   assistedLineForPointer,
+  assistedLineEndHead,
   assistedLineRightAngleGuidePath,
-  assistedLineRightAngleDecoration,
 } = require("../app/diagram/assistedLine.ts");
 const {
   hasArrowHead,
@@ -66,28 +66,28 @@ test("angle bisector is an explicit request and cannot leak into perpendicular",
   assert.equal(perpendicularTarget?.id, horizontal.id);
 });
 
-test("right-angle marks stay at the foot and never change a line into an arrow", () => {
+test("perpendicular construction always ends at the foot and stays a Line", () => {
   const target = makeElement("line", 20, 100, 240, 0);
   const base = assistedLinePreview(
     { x: 140, y: 30 },
     assistedLineTargetAt("perpendicular", { x: 140, y: 100 }, [target]),
   );
   assert.ok(base);
-  const extended = assistedLineForPointer({ x: 140, y: 190 }, base, null);
+  const fixed = assistedLineForPointer({ x: 140, y: 190 }, base, null);
+  near(fixed.end, fixed.foot);
   const decorated = {
-    ...extended,
+    ...fixed,
     marker: "right-angle-outside-right",
   };
-  const mark = assistedLineRightAngleDecoration(decorated);
-  assert.ok(mark);
-  assert.equal(hasArrowHead(mark.marker), false);
+  const endHead = assistedLineEndHead(decorated);
+  assert.equal(endHead, "right-angle-outside-right");
+  assert.equal(hasArrowHead(endHead), false);
   assert.equal(hasArrowHead("open"), true);
-  near({ at: mark.at }, { at: 70 / 160 });
   assert.match(
     rightAngleMarkerPath(
       { x: 140, y: 100 },
       { x: 0, y: 160 },
-      mark.marker,
+      endHead,
       9,
     ),
     /^M140 100L/,
@@ -173,7 +173,7 @@ test("all construction starts use the shared snap precedence", () => {
   assert.equal(result.target?.kind, "point");
 });
 
-test("v1 documents migrate through the explicit schema pipeline", () => {
+test("v1 migration preserves user-selected right-angle endHead", () => {
   const line = {
     ...makeElement("line", 10, 10, 120, 0),
     endHead: "right-angle-inside-left",
@@ -187,11 +187,8 @@ test("v1 documents migrate through the explicit schema pipeline", () => {
   };
   const migrated = migrateDocument(legacy);
   assert.equal(migrated.version, 2);
-  assert.equal(migrated.elements[0].endHead, "none");
-  assert.deepEqual(migrated.elements[0].rightAngle, {
-    marker: "right-angle-inside-left",
-    at: 1,
-  });
+  assert.equal(migrated.elements[0].endHead, "right-angle-inside-left");
+  assert.equal(migrated.elements[0].rightAngle, undefined);
   assert.equal(validDocument(migrated), true);
   assert.equal(migrateDocument({ ...legacy, version: 99 }), null);
 });

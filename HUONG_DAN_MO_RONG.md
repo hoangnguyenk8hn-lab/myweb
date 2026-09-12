@@ -296,7 +296,7 @@ Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có tr
 - Mỗi construction có target/preview riêng. `assistedLine.ts` chỉ dispatch theo `kind`; không thêm mode-specific field vào `PerpendicularTarget`.
 - `CurrentCanvasCore.tsx` là chủ sở hữu duy nhất của chuỗi `pointerdown → preview → commit/cancel`. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
 - Mọi thao tác bắt điểm gọi `snapPointToScene()` trong `snapping.ts`. Hàm này quyết định thứ tự ưu tiên grid, khung đối tượng và anchor/intersection. Muốn thêm một loại điểm bắt, mở rộng `SnapTarget` và hàm này thay vì copy thuật toán vào tool mới.
-- Dấu vuông góc được lưu trong `rightAngle` với vị trí chuẩn hóa trên đường. `startHead`/`endHead` chỉ dành cho marker đầu đường. JSON cũ có right-angle trong `endHead` vẫn được render tương thích, nhưng mã mới phải ghi `rightAngle`.
+- Công cụ Perpendicular tạo đúng đoạn từ điểm đầu tới chân vuông góc và lưu góc người dùng chọn trong `endHead`, giống mô hình cũ. Preview dùng góc lớn để dễ chọn; renderer thu về tỷ lệ glyph 4/10 khi vẽ thật. Trường `rightAngle` chỉ còn để đọc tương thích các tài liệu đã được tạo trong giai đoạn refactor trước đó.
 - Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, đặt dependency graph ở module dữ liệu thuần, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
 - Khi thêm element type persisted, thêm đúng một lần vào `ELEMENT_TYPES` trong `types.ts`; validator và `makeElement()` cùng dùng registry này. Palette/catalog chỉ chứa metadata UI, không sở hữu một allowed-type set khác.
 

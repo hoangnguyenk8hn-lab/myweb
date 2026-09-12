@@ -1,8 +1,8 @@
 import type {
   AssistedLineConstruction,
   DiagramElement,
+  ArrowHead,
   Point,
-  RightAngleDecoration,
   RightAngleMarker,
 } from "./types";
 import {
@@ -18,7 +18,6 @@ import {
   perpendicularPreview,
   perpendicularRetainsTargetAt,
   perpendicularTargetAt,
-  rightAngleDecorationForPreview,
   rightAngleGuidePath,
   type PerpendicularPreview,
   type PerpendicularTarget,
@@ -89,10 +88,9 @@ export function assistedLineRightAngleGuidePath(
     : "";
 }
 
-export function assistedLineRightAngleDecoration(
+/** Perpendicular is the exact segment PH, so its chosen corner is an endHead. */
+export function assistedLineEndHead(
   preview: AssistedLinePreview,
-): RightAngleDecoration | undefined {
-  return preview.kind === "perpendicular"
-    ? rightAngleDecorationForPreview(preview)
-    : undefined;
+): ArrowHead {
+  return preview.kind === "perpendicular" ? (preview.marker ?? "none") : "none";
 }

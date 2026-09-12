@@ -2,7 +2,6 @@ import { rightAngleMarkerPath } from "./lineMarkers";
 import type {
   DiagramElement,
   Point,
-  RightAngleDecoration,
   RightAngleMarker,
 } from "./types";
 import type { StraightLineTarget } from "./constructionTargets";
@@ -75,30 +74,14 @@ function previewFrame(preview: PerpendicularPreview) {
 }
 
 export function perpendicularLineForPointer(
-  pointer: Point,
+  _pointer: Point,
   preview: PerpendicularPreview,
-  previousEnd: Point | null = null,
-  zoom = 1,
+  _previousEnd: Point | null = null,
+  _zoom = 1,
 ): PerpendicularPreview {
-  const frame = previewFrame(preview);
-  if (!frame) return preview;
-  const scale = Math.max(zoom, 1e-6),
-    fromFoot = Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y);
-  if (previousEnd && fromFoot <= 30 / scale)
-    return { ...preview, end: previousEnd };
-  const offset = {
-      x: pointer.x - preview.start.x,
-      y: pointer.y - preview.start.y,
-    },
-    along = offset.x * frame.x.x + offset.y * frame.x.y,
-    length = Math.max(frame.length, along);
-  return {
-    ...preview,
-    end: {
-      x: preview.start.x + frame.x.x * length,
-      y: preview.start.y + frame.x.y * length,
-    },
-  };
+  // Perpendicular construction always creates the exact segment PH. Pointer
+  // movement around H is reserved exclusively for choosing the corner mark.
+  return { ...preview, end: preview.foot };
 }
 
 export function perpendicularRetainsTargetAt(
@@ -106,21 +89,11 @@ export function perpendicularRetainsTargetAt(
   preview: PerpendicularPreview,
   zoom = 1,
 ) {
-  const scale = Math.max(zoom, 1e-6),
-    frame = previewFrame(preview);
-  if (
+  const scale = Math.max(zoom, 1e-6);
+  return (
     lineDistance(pointer, preview.target.a, preview.target.b) <= 10 / scale ||
     Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <= 30 / scale
-  )
-    return true;
-  if (!frame) return false;
-  const offset = {
-      x: pointer.x - preview.start.x,
-      y: pointer.y - preview.start.y,
-    },
-    along = offset.x * frame.x.x + offset.y * frame.x.y,
-    lateral = Math.abs(offset.x * frame.y.x + offset.y * frame.y.y);
-  return along >= frame.length - 18 / scale && lateral <= 14 / scale;
+  );
 }
 
 export function perpendicularMarkerAt(
@@ -159,19 +132,4 @@ export function rightAngleGuidePath(
   return frame
     ? rightAngleMarkerPath(preview.foot, frame.x, marker, size)
     : "";
-}
-
-export function rightAngleDecorationForPreview(
-  preview: PerpendicularPreview,
-): RightAngleDecoration | undefined {
-  if (!preview.marker) return undefined;
-  const dx = preview.end.x - preview.start.x,
-    dy = preview.end.y - preview.start.y,
-    length2 = dx * dx + dy * dy;
-  if (length2 < 1e-12) return undefined;
-  const at =
-    ((preview.foot.x - preview.start.x) * dx +
-      (preview.foot.y - preview.start.y) * dy) /
-    length2;
-  return { marker: preview.marker, at: Math.max(0, Math.min(1, at)) };
 }

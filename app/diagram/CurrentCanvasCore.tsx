@@ -62,7 +62,7 @@ import {
   assistedLineMarkerAt as perpendicularMarkerAt,
   assistedLinePreview as buildPerpendicularPreview,
   assistedLineRetainsTargetAt as perpendicularRetainsTargetAt,
-  assistedLineRightAngleDecoration as rightAngleDecorationForPreview,
+  assistedLineEndHead,
   assistedLineRightAngleGuidePath as rightAngleGuidePath,
   assistedLineTargetAt,
   RIGHT_ANGLE_MARKERS,
@@ -1014,8 +1014,7 @@ export function CurrentCanvas(p: Props) {
           preview.end.x - preview.start.x,
           preview.end.y - preview.start.y,
         );
-        const rightAngle = rightAngleDecorationForPreview(preview);
-        if (rightAngle) line.rightAngle = rightAngle;
+        line.endHead = assistedLineEndHead(preview);
         p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
         p.onSelect([line.id]);
         p.onEnd();
