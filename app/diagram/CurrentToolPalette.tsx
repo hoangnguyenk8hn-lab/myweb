@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   BASIC_SHAPES,
   COORDINATE_SHAPES,
@@ -7,11 +7,11 @@ import {
   type ShapeDefinition,
 } from "./shapes";
 import { ToolIcon } from "./catalog";
-import {
-  setAssistedLineConstruction,
-  type AssistedLineConstruction,
-} from "./constructionMode";
-import type { DiagramTool, PlotSettings } from "./types";
+import type {
+  AssistedLineConstruction,
+  DiagramTool,
+  PlotSettings,
+} from "./types";
 
 const ShapeButton = ({
   shape,
@@ -56,19 +56,10 @@ export function CurrentToolPalette({
   onPlot: (kind: PlotSettings["kind"]) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({
-      general: true,
-      lines: true,
-      document: true,
-    }),
-    [assistedLine, setAssistedLine] =
-      useState<AssistedLineConstruction>("perpendicular");
-
-  useEffect(() => {
-    if (activeTool !== "perpendicular") {
-      setAssistedLine("perpendicular");
-      setAssistedLineConstruction("perpendicular");
-    }
-  }, [activeTool]);
+    general: true,
+    lines: true,
+    document: true,
+  });
 
   const header = (id: string, label: string) => (
     <button
@@ -87,11 +78,7 @@ export function CurrentToolPalette({
           key={shape.id}
           shape={shape}
           active={activeTool === `shape:${shape.id}`}
-          onSelect={() => {
-            setAssistedLine("perpendicular");
-            setAssistedLineConstruction("perpendicular");
-            onSelect(`shape:${shape.id}`);
-          }}
+          onSelect={() => onSelect(`shape:${shape.id}`)}
         />
       ))}
     </div>
@@ -107,11 +94,7 @@ export function CurrentToolPalette({
       title={label}
       aria-label={label}
       aria-pressed={activeTool === tool}
-      onClick={() => {
-        setAssistedLine("perpendicular");
-        setAssistedLineConstruction("perpendicular");
-        onSelect(tool);
-      }}
+      onClick={() => onSelect(tool)}
     >
       {content ?? <ToolIcon tool={tool} size={22} />}
     </button>
@@ -121,7 +104,7 @@ export function CurrentToolPalette({
     label: string,
     content: React.ReactNode,
   ) => {
-    const active = activeTool === "perpendicular" && assistedLine === mode;
+    const active = activeTool === mode;
     return (
       <button
         className={`shape-button${active ? " active" : ""}`}
@@ -129,11 +112,7 @@ export function CurrentToolPalette({
         title={label}
         aria-label={label}
         aria-pressed={active}
-        onClick={() => {
-          setAssistedLine(mode);
-          setAssistedLineConstruction(mode);
-          onSelect("perpendicular");
-        }}
+        onClick={() => onSelect(mode)}
       >
         {content}
       </button>
@@ -234,11 +213,7 @@ export function CurrentToolPalette({
                 aria-label={shape.label}
                 className={`labeled-shape${activeTool === `shape:${shape.id}` ? " active" : ""}`}
                 key={shape.id}
-                onClick={() => {
-                  setAssistedLine("perpendicular");
-                  setAssistedLineConstruction("perpendicular");
-                  onSelect(`shape:${shape.id}`);
-                }}
+                onClick={() => onSelect(`shape:${shape.id}`)}
               >
                 <svg viewBox="0 0 110 110">
                   <path
@@ -273,11 +248,7 @@ export function CurrentToolPalette({
             <button
               key={kind}
               title={label}
-              onClick={() => {
-                setAssistedLine("perpendicular");
-                setAssistedLineConstruction("perpendicular");
-                onPlot(kind);
-              }}
+              onClick={() => onPlot(kind)}
             >
               <svg viewBox="0 0 42 34">
                 <path
@@ -299,11 +270,7 @@ export function CurrentToolPalette({
             className="shape-button"
             title="Image"
             aria-label="Image"
-            onClick={() => {
-              setAssistedLine("perpendicular");
-              setAssistedLineConstruction("perpendicular");
-              onImage();
-            }}
+            onClick={onImage}
           >
             <svg viewBox="0 0 28 28">
               <path d="M3 5H25V23H3ZM5 20L11 12L16 17L20 13L24 20" />

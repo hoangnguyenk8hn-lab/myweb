@@ -40,6 +40,7 @@ export function makeElement(
         tool === "hand" ||
         tool === "tangent" ||
         tool === "perpendicular" ||
+        tool === "angle-bisector" ||
         tool === "point-reflection"
       ? "rectangle"
       : (tool as DiagramElement["type"]);

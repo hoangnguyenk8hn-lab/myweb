@@ -8,6 +8,7 @@ import {
 } from "./sceneGeometry";
 import { parseColor } from "./colorModel";
 import { collectIntersections, intersectionAppearance } from "./intersections";
+import { RIGHT_ANGLE_MARKERS } from "./lineMarkers";
 
 export interface ImageOptions {
   format: "png" | "jpeg" | "svg";
@@ -207,6 +208,15 @@ export function validDocument(value: unknown): value is DiagramDocument {
     }
     for (const key of ["boxed", "intersection", "blockIntersection"] as const)
       if (e[key] !== undefined && typeof e[key] !== "boolean") return false;
+    if (
+      e.rightAngle !== undefined &&
+      (!e.rightAngle ||
+        !RIGHT_ANGLE_MARKERS.includes(e.rightAngle.marker) ||
+        !finite(e.rightAngle.at) ||
+        e.rightAngle.at < 0 ||
+        e.rightAngle.at > 1)
+    )
+      return false;
     if (
       e.intersectionWith !== undefined &&
       (!Array.isArray(e.intersectionWith) ||

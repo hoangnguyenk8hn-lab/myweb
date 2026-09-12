@@ -19,10 +19,11 @@ import {
 import { MathFormula } from "./MathFormula";
 import { PlotGraphic } from "./PlotGraphic";
 import { PaintDefinition } from "./PaintDefinition";
-
-function isRightAngleMarker(type: ArrowHead) {
-  return type.startsWith("right-angle-");
-}
+import {
+  hasArrowHead,
+  isRightAngleMarker,
+  rightAngleDecorationPath,
+} from "./lineMarkers";
 
 export function MarkerGlyph({
   type,
@@ -116,12 +117,26 @@ export function SceneElement({
   };
   const transform = elementTransform(e);
   const markerSize = markerDimension(e, "mid");
+  const startHead = isRightAngleMarker(e.startHead) ? "none" : e.startHead ?? "none";
+  const endHead = isRightAngleMarker(e.endHead) ? "none" : e.endHead ?? "none";
+  // Old documents stored this decoration in an end marker. Keep them visible
+  // without treating them as arrows; newly created lines use `rightAngle`.
+  const rightAngle =
+    e.rightAngle ??
+    (isRightAngleMarker(e.endHead)
+      ? { marker: e.endHead, at: 1 }
+      : isRightAngleMarker(e.startHead)
+        ? { marker: e.startHead, at: 0 }
+        : undefined);
+  const rightAnglePath = rightAngle
+    ? rightAngleDecorationPath(e, rightAngle, markerDimension(e, "end"))
+    : "";
   const marker = (position: string, head: ArrowHead) => (
     <marker
       key={position}
       id={`${position}-${id}`}
       viewBox="0 0 10 10"
-      refX={isRightAngleMarker(head) ? 5 : 8}
+      refX="8"
       refY="5"
       markerWidth={markerDimension(e, position === "tail" ? "start" : "end")}
       markerHeight={markerDimension(e, position === "tail" ? "start" : "end")}
@@ -171,8 +186,8 @@ export function SceneElement({
     content = (
       <>
         <defs>
-          {marker("tail", e.startHead ?? "none")}
-          {marker("head", e.endHead ?? "none")}
+          {marker("tail", startHead)}
+          {marker("head", endHead)}
           {(e.breakSize ?? 0) > 0 && (
             <mask
               id={`break-${id}`}
@@ -203,15 +218,26 @@ export function SceneElement({
           {...common}
           fill="none"
           markerStart={
-            e.startHead && e.startHead !== "none"
+            hasArrowHead(startHead)
               ? `url(#tail-${id})`
               : undefined
           }
           markerEnd={
-            e.endHead && e.endHead !== "none" ? `url(#head-${id})` : undefined
+            hasArrowHead(endHead) ? `url(#head-${id})` : undefined
           }
           mask={(e.breakSize ?? 0) > 0 ? `url(#break-${id})` : undefined}
         />
+        {rightAnglePath && (
+          <path
+            d={rightAnglePath}
+            fill="none"
+            stroke={s.stroke}
+            strokeWidth={s.strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pointerEvents="none"
+          />
+        )}
         {e.midHead && e.midHead !== "none" && (
           <g
             transform={`translate(${middle.x} ${middle.y}) rotate(${angle}) translate(${-markerSize / 2} ${-markerSize / 2}) scale(${markerSize / 10})`}

@@ -9,6 +9,7 @@ import {
 } from "./EditorControls";
 import { ColorControl } from "./ColorPicker";
 import { DEFAULT_INTERSECTION_MARKER_SIZE } from "./intersections";
+import { hasArrowHead } from "./lineMarkers";
 import { isCurve, LINE_TYPES, TEXT_TYPES } from "./sceneGeometry";
 import type {
   DiagramDocument,
@@ -241,10 +242,10 @@ export function EditorToolbar({
                       onPatch({
                         type:
                           kind === "Straight"
-                            ? e.endHead !== "none"
+                            ? hasArrowHead(e.endHead)
                               ? "arrow"
                               : "line"
-                            : e.endHead !== "none"
+                            : hasArrowHead(e.endHead)
                               ? "curved-arrow"
                               : "curve",
                       })

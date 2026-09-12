@@ -6,6 +6,7 @@ export type DiagramTool =
   | "hand"
   | "tangent"
   | "perpendicular"
+  | "angle-bisector"
   | "point-reflection"
   | "point"
   | "plain-text"
@@ -45,10 +46,30 @@ export type ElementType = Exclude<
   | "hand"
   | "tangent"
   | "perpendicular"
+  | "angle-bisector"
   | "point-reflection"
   | `shape:${string}`
 >;
+
+/**
+ * A construction choice is a real editor tool, never an ambient module flag.
+ * Keeping this separate from ElementType prevents construction tools from being
+ * accidentally persisted as drawable elements.
+ */
+export type AssistedLineConstruction = "perpendicular" | "angle-bisector";
+
+export function isAssistedLineConstruction(
+  tool: DiagramTool,
+): tool is AssistedLineConstruction {
+  return tool === "perpendicular" || tool === "angle-bisector";
+}
+
 export type DashStyle = "solid" | "dashed" | "dotted";
+export type RightAngleMarker =
+  | "right-angle-inside-left"
+  | "right-angle-inside-right"
+  | "right-angle-outside-left"
+  | "right-angle-outside-right";
 export type ArrowHead =
   | "none"
   | "arrow"
@@ -62,10 +83,15 @@ export type ArrowHead =
   | "cross"
   | "plus"
   | "arc"
-  | "right-angle-inside-left"
-  | "right-angle-inside-right"
-  | "right-angle-outside-left"
-  | "right-angle-outside-right";
+  /** Legacy documents may still contain a right-angle mark in an end head. */
+  | RightAngleMarker;
+
+/** A right-angle mark belongs at a position on a line, not at its SVG end marker. */
+export interface RightAngleDecoration {
+  marker: RightAngleMarker;
+  /** Position along the line path, from start (0) to end (1). */
+  at: number;
+}
 
 export interface ElementStyle {
   stroke: string;
@@ -105,6 +131,8 @@ export interface DiagramElement {
   fontSize?: number;
   startHead?: ArrowHead;
   endHead?: ArrowHead;
+  /** Perpendicular construction decoration. New drawings never store this in endHead. */
+  rightAngle?: RightAngleDecoration;
   locked?: boolean;
   shape?: string;
   points?: Point[];

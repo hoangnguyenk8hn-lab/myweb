@@ -1,4 +1,4 @@
-import type { DiagramElement, Point } from "./types";
+import type { DiagramElement, GridSettings, Point } from "./types";
 import {
   absolutePoints,
   center,
@@ -6,6 +6,7 @@ import {
   isPointElement,
   LINE_TYPES,
   pointRadius,
+  worldBounds,
   worldPoint,
 } from "./sceneGeometry";
 import { svgPathAnchors } from "./pathBounds";
@@ -152,6 +153,83 @@ export function nearestSnapTarget(
     }
   }
   return closest;
+}
+
+export type SceneSnapResult = {
+  point: Point;
+  target: SnapTarget | null;
+  guides: { x?: number; y?: number };
+};
+
+/**
+ * The one source of truth for grid, object-frame and anchor snapping. Canvas
+ * gestures may choose a different target list, but they never reimplement the
+ * precedence or tolerance rules.
+ */
+export function snapPointToScene(
+  point: Point,
+  options: {
+    grid: GridSettings;
+    gridEnabled?: boolean;
+    elements: DiagramElement[];
+    targets: SnapTarget[];
+    excluded?: string[];
+    zoom?: number;
+    ownIntersectionId?: string;
+  },
+): SceneSnapResult {
+  const {
+    grid,
+    elements,
+    targets,
+    excluded = [],
+    zoom = 1,
+    ownIntersectionId,
+  } = options;
+  const gridEnabled = options.gridEnabled ?? grid.snap;
+  let x = gridEnabled ? Math.round(point.x / grid.size) * grid.size : point.x;
+  let y = gridEnabled ? Math.round(point.y / grid.size) * grid.size : point.y;
+  const guides: { x?: number; y?: number } = {};
+
+  if (grid.snapShapes) {
+    let dx = 6 / Math.max(zoom, 1e-6);
+    let dy = 6 / Math.max(zoom, 1e-6);
+    for (const element of elements) {
+      if (excluded.includes(element.id) || LINE_TYPES.has(element.type)) continue;
+      const box = worldBounds(element);
+      for (const value of [box.x, box.x + box.width / 2, box.x + box.width]) {
+        const distance = Math.abs(point.x - value);
+        if (distance < dx) {
+          dx = distance;
+          x = value;
+          guides.x = value;
+        }
+      }
+      for (const value of [box.y, box.y + box.height / 2, box.y + box.height]) {
+        const distance = Math.abs(point.y - value);
+        if (distance < dy) {
+          dy = distance;
+          y = value;
+          guides.y = value;
+        }
+      }
+    }
+  }
+
+  const target = nearestSnapTarget(
+    point,
+    targets,
+    excluded,
+    zoom,
+    ownIntersectionId,
+  );
+  if (target) {
+    x = target.point.x;
+    y = target.point.y;
+    guides.x = x;
+    guides.y = y;
+  }
+  return { point: { x, y }, target, guides };
 }
 
 /** Align any real anchor in the moving selection, retaining the cursor's grab offset. */

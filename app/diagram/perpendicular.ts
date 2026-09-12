@@ -1,6 +1,17 @@
-import type { ArrowHead, DiagramElement, Point } from "./types";
+import {
+  RIGHT_ANGLE_MARKERS,
+  rightAngleMarkerPath,
+} from "./lineMarkers";
+import type {
+  AssistedLineConstruction,
+  DiagramElement,
+  Point,
+  RightAngleDecoration,
+  RightAngleMarker,
+} from "./types";
 import { lineVertices, worldPoint } from "./sceneGeometry";
-import { getAssistedLineConstruction } from "./constructionMode";
+
+export { RIGHT_ANGLE_MARKERS } from "./lineMarkers";
 
 type StraightLineTarget = {
   id: string;
@@ -16,15 +27,6 @@ export type PerpendicularTarget = StraightLineTarget & {
   second?: StraightLineTarget;
 };
 
-export const RIGHT_ANGLE_MARKERS = [
-  "right-angle-inside-left",
-  "right-angle-inside-right",
-  "right-angle-outside-left",
-  "right-angle-outside-right",
-] as const satisfies readonly ArrowHead[];
-
-export type RightAngleMarker = (typeof RIGHT_ANGLE_MARKERS)[number];
-
 export type PerpendicularPreview = {
   target: PerpendicularTarget;
   start: Point;
@@ -36,19 +38,10 @@ export type PerpendicularPreview = {
   secondTarget?: StraightLineTarget;
 };
 
-type MarkerSigns = { x: -1 | 1; y: -1 | 1 };
-
 type BisectorRay = {
   line: StraightLineTarget;
   unit: Point;
   angle: number;
-};
-
-const MARKER_SIGNS: Record<RightAngleMarker, MarkerSigns> = {
-  "right-angle-inside-left": { x: -1, y: -1 },
-  "right-angle-inside-right": { x: -1, y: 1 },
-  "right-angle-outside-left": { x: 1, y: -1 },
-  "right-angle-outside-right": { x: 1, y: 1 },
 };
 
 function segmentDistance(point: Point, a: Point, b: Point) {
@@ -253,9 +246,10 @@ export function perpendicularTargetAt(
   pointer: Point,
   elements: DiagramElement[],
   zoom = 1,
+  mode: AssistedLineConstruction = "perpendicular",
 ): PerpendicularTarget | null {
   const lines = straightLineTargets(elements);
-  if (getAssistedLineConstruction() === "angle-bisector") {
+  if (mode === "angle-bisector") {
     if (lines.length < 2) return null;
     return {
       ...lines[0],
@@ -418,31 +412,35 @@ export function rightAngleGuidePath(
 
   const frame = previewFrame(preview);
   if (!frame) return "";
-  const signs = MARKER_SIGNS[marker],
-    h = preview.foot,
-    alongX = {
-      x: frame.x.x * signs.x * size,
-      y: frame.x.y * signs.x * size,
-    },
-    alongY = {
-      x: frame.y.x * signs.y * size,
-      y: frame.y.y * signs.y * size,
-    },
-    p1 = { x: h.x + alongY.x, y: h.y + alongY.y },
-    p2 = { x: p1.x + alongX.x, y: p1.y + alongX.y },
-    p3 = { x: h.x + alongX.x, y: h.y + alongX.y };
-  return `M${h.x} ${h.y}L${p1.x} ${p1.y}L${p2.x} ${p2.y}L${p3.x} ${p3.y}`;
+  return rightAngleMarkerPath(preview.foot, frame.x, marker, size);
+}
+
+/**
+ * Keep the right-angle mark at the perpendicular foot instead of attaching it
+ * to an SVG end marker. The normalized position follows later line transforms.
+ */
+export function rightAngleDecorationForPreview(
+  preview: PerpendicularPreview,
+): RightAngleDecoration | undefined {
+  if (!preview.marker || preview.mode === "angle-bisector") return undefined;
+  const dx = preview.end.x - preview.start.x,
+    dy = preview.end.y - preview.start.y,
+    length2 = dx * dx + dy * dy;
+  if (length2 < 1e-12) return undefined;
+  const at =
+    ((preview.foot.x - preview.start.x) * dx +
+      (preview.foot.y - preview.start.y) * dy) /
+    length2;
+  return { marker: preview.marker, at: Math.max(0, Math.min(1, at)) };
 }
 
 /**
  * Build the perpendicular segment from `source` to its foot on the target line,
- * or an angle-bisector segment when the assisted-line palette is in that mode.
+ * or an angle-bisector segment when the caller explicitly requests that mode.
  */
 export function perpendicularPreview(
   source: Point,
   target: PerpendicularTarget | null,
-  _width: number,
-  _height: number,
 ): PerpendicularPreview | null {
   if (!target) return null;
   if (target.mode === "angle-bisector") return angleBisectorPreview(source, target);

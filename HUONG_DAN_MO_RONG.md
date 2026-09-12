@@ -14,7 +14,7 @@ Mở địa chỉ localhost trong terminal. Bây giờ sửa một tệp và nh�
 - Chỉ muốn đổi giao diện: mở `app/current.css`.
 - Muốn thêm một hình: mở `app/diagram/shapes.ts`.
 - Muốn thêm thao tác: mở `CurrentDiagramEditor.tsx` và `EditorToolbar.tsx`.
-- Muốn đổi cơ chế kéo hình/điểm: mở `CurrentCanvas.tsx`.
+- Muốn đổi cơ chế kéo hình/điểm: mở `CurrentCanvasCore.tsx`. `CurrentCanvas.tsx` chỉ giữ entry point tương thích ngược.
 - Bảng màu: `ColorPicker.tsx`, chuyển đổi Hex/RGBA/HSV trong `colorModel.ts`, hiển thị nền trong `PaintDefinition.tsx`.
 - Giao điểm: `intersections.ts` tính điểm trên đường bao; `IntersectionLayer.tsx` vẽ dấu. `blockIntersection` được ưu tiên hơn `intersection` của đối tượng khác.
 
@@ -32,7 +32,8 @@ Khi kéo hình, canvas cập nhật tọa độ trong tài liệu. Bộ history 
 | types.ts                      | Khai báo kiểu TypeScript của dữ liệu               |
 | shapes.ts                     | Định nghĩa SVG và danh sách hình được hiển thị     |
 | CurrentToolPalette.tsx        | Các nhóm công cụ bên trái                          |
-| CurrentCanvas.tsx             | Pointer events và lớp tay nắm                      |
+| CurrentCanvasCore.tsx         | Nguồn duy nhất của pointer events, snap và tay nắm |
+| CurrentCanvas.tsx             | Entry point tương thích ngược                       |
 | sceneGeometry.ts              | Tọa độ, Bézier, điểm nối, biến đổi                 |
 | pathBounds.ts                 | Cực trị đường SVG để tính khung chọn đúng với hình |
 | SceneElement.tsx              | Render hình, nhãn, đường và marker                 |
@@ -191,7 +192,7 @@ Muốn gắn phím tắt, thêm vào bộ xử lý `keydown` ở editor. Giữ k
 
 ## 7. Chỉnh tương tác và undo/redo
 
-Các thao tác nằm trong `CurrentCanvas.tsx`:
+Các thao tác nằm trong `CurrentCanvasCore.tsx`:
 
 - `backgroundDown`: bắt đầu tạo hình hoặc vùng chọn.
 - `elementDown`: chọn/kéo đối tượng.
@@ -264,7 +265,7 @@ Khung chọn đơn dùng `sceneBounds()` trong hệ tọa độ của hình; ch�
 
 Line/Curve dùng `points` khi đã bật chỉnh nhiều vertex. `lineVertices()` trả về hai đầu mút cũ nếu `points` chưa có, nên JSON cũ vẫn hoạt động. `addLineVertex()` chèn đúng điểm giữa của đoạn đang hiển thị; với Bézier hai đầu mút, điểm mới là giá trị tại t=0.5 chứ không phải trung điểm của khung. `moveLineVertex()` và `removeLineVertex()` dựng lại hệ tọa độ chuẩn hóa, bù tâm xoay/nghiêng, giữ các vertex còn lại tại đúng vị trí canvas và tách liên kết đầu mút khi chính đầu đó bị sửa. Curve nhiều vertex dùng Catmull–Rom đổi sang các đoạn cubic Bézier mở; curve còn hai vertex tiếp tục dùng `control1` và `control2`. `linePoint()` dùng chung cho marker Middle, break và hướng marker.
 
-Trong `CurrentCanvas.tsx`, dấu cộng ở giữa mỗi đoạn gọi `addLineVertex()`. Nút đỉnh gọi gesture `point` hoặc `endpoint`; vertex đang chọn hiện nút xóa đỏ và Delete/Backspace chỉ xóa vertex đó khi đường còn hơn hai vertex. Mỗi thao tác thêm, xóa hoặc kéo vertex là một bước undo/redo. Khi `boxed` bật, các nút vertex được ẩn và khung resize/xoay hoạt động như trước.
+Trong `CurrentCanvasCore.tsx`, dấu cộng ở giữa mỗi đoạn gọi `addLineVertex()`. Nút đỉnh gọi gesture `point` hoặc `endpoint`; vertex đang chọn hiện nút xóa đỏ và Delete/Backspace chỉ xóa vertex đó khi đường còn hơn hai vertex. Mỗi thao tác thêm, xóa hoặc kéo vertex là một bước undo/redo. Khi `boxed` bật, các nút vertex được ẩn và khung resize/xoay hoạt động như trước.
 
 `style.fillPaint` là kiểu phân biệt `gradient` hoặc `pattern`; `style.fill` là màu Basic. Khi thêm kiểu tô mới, cập nhật `types.ts`, `ColorPicker.tsx`, `PaintDefinition.tsx` và `validDocument()`. Bảng màu và thanh Size gom một lần kéo thành một bước undo bằng gesture của toolbar.
 
@@ -274,13 +275,29 @@ Menu **Intersection** trên toolbar bật trường `intersection` của đối 
 
 `snapping.ts` gom đầu mút, trung điểm, đỉnh, tâm và giao điểm thành các mục tiêu dùng chung. `svgPathAnchors()` lấy điểm từ các lệnh SVG gốc, không dùng đỉnh giả sinh ra khi chia nhỏ đường cong. Trung điểm Bézier lấy tại tham số t=0.5, cùng vị trí marker Middle mặc định. Mọi điểm được biến đổi sang hệ tọa độ canvas trước khi tìm điểm gần nhất bằng `nearestSnapTarget()`, với dung sai theo zoom. `translationSnap()` căn một điểm thực trên hình đang kéo tới mục tiêu và giữ độ lệch giữa con trỏ với chỗ đã bấm vào hình.
 
-`CurrentCanvas.tsx` giữ danh sách mục tiêu tại thời điểm bắt đầu kéo đầu mút, để đầu mút có thể bắt lại chỗ giao của chính đường đó mà mục tiêu không chạy theo con trỏ. `dropLineEndpoint()` ưu tiên tọa độ đã bắt khi thả chuột, tránh cơ chế tự nối vào khung hình làm lệch điểm. `movePolygonPoint()` bù vị trí tâm xoay sau khi thay đổi khung đa giác để giữ các đỉnh còn lại. `blockIntersection` chỉ chặn dấu và mục tiêu giao điểm; đầu mút và đỉnh vẫn có thể bắt được.
+`CurrentCanvasCore.tsx` giữ danh sách mục tiêu tại thời điểm bắt đầu kéo đầu mút, để đầu mút có thể bắt lại chỗ giao của chính đường đó mà mục tiêu không chạy theo con trỏ. `dropLineEndpoint()` ưu tiên tọa độ đã bắt khi thả chuột, tránh cơ chế tự nối vào khung hình làm lệch điểm. `movePolygonPoint()` bù vị trí tâm xoay sau khi thay đổi khung đa giác để giữ các đỉnh còn lại. `blockIntersection` chỉ chặn dấu và mục tiêu giao điểm; đầu mút và đỉnh vẫn có thể bắt được.
 
 Chọn vùng gọi `elementTouchesRect()` để kiểm tra vùng quét có thực sự chạm nét của đối tượng, thay vì buộc toàn bộ `worldBounds()` phải nằm trong vùng. Nhờ đó, vùng nằm hoàn toàn trong khoảng rỗng của Circle/Ellipse không chọn nhầm hình. `SceneElement.tsx` đặt Shape/Polyline ở chế độ hit-test theo `stroke`; lớp hit vô hình rộng hơn nét thật giúp vẫn dễ bấm, nhưng fill hoặc khoảng rỗng bên trong không kích hoạt chọn.
 
 Vùng SVG nhận focus trong `onPointerDownCapture`, trước khi gesture gọi `preventDefault()`. Nhờ đó Delete/Backspace không còn bị giữ ở ô thuộc tính sau khi người dùng bấm chọn hình. Phím xóa vẫn sửa nội dung khi đang gõ chữ/số, còn thanh range và checkbox cho phép xóa đối tượng. Menu dùng listener capture để đóng khi bấm vào vùng vẽ.
 
 Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có trường này nghĩa là giao với mọi đối tượng; mảng rỗng nghĩa là không còn liên kết. Khi sao chép cả nhóm, các liên kết được đổi sang ID của bản sao. Bật lại Intersection trên toolbar chuyển đối tượng sang chế độ giao với mọi đối tượng. Undo/redo và JSON lưu các thuộc tính này cùng tài liệu.
+
+## 12. Quy tắc kiến trúc cho construction và snap
+
+- Mỗi construction là một `DiagramTool` có tên riêng, ví dụ `"perpendicular"` hoặc `"angle-bisector"`. Không dùng biến global hoặc cờ nằm ngoài React để ghi nhớ tool đang chọn.
+- `CurrentCanvasCore.tsx` là chủ sở hữu duy nhất của chuỗi `pointerdown → preview → commit/cancel`. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
+- Mọi thao tác bắt điểm gọi `snapPointToScene()` trong `snapping.ts`. Hàm này quyết định thứ tự ưu tiên grid, khung đối tượng và anchor/intersection. Muốn thêm một loại điểm bắt, mở rộng `SnapTarget` và hàm này thay vì copy thuật toán vào tool mới.
+- Dấu vuông góc được lưu trong `rightAngle` với vị trí chuẩn hóa trên đường. `startHead`/`endHead` chỉ dành cho marker đầu đường. JSON cũ có right-angle trong `endHead` vẫn được render tương thích, nhưng mã mới phải ghi `rightAngle`.
+- Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, đặt dependency graph ở module dữ liệu thuần, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
+
+Trước khi thêm tool mới, thêm regression test geometry thuần vào `tests/` và chạy:
+
+```bash
+npx tsc --noEmit
+npm test
+npm run build
+```
 
 Chạy:
 

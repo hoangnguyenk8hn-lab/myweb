@@ -17,8 +17,8 @@ import {
 } from "./intersections";
 import {
   collectSnapTargets,
-  nearestSnapTarget,
   objectSnapTargets,
+  snapPointToScene,
   translationSnap,
   SNAP_LABELS,
   type SnapTarget,
@@ -54,12 +54,21 @@ import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
 import {
   tangentCandidates,
+  tangentLineForPointer,
+  tangentRetainsCandidateAt,
   tangentTargetAt,
   type TangentCandidate,
+  type TangentLinePreview,
 } from "./tangents";
 import {
+  perpendicularLineForPointer,
+  perpendicularMarkerAt,
   perpendicularPreview as buildPerpendicularPreview,
+  perpendicularRetainsTargetAt,
   perpendicularTargetAt,
+  RIGHT_ANGLE_MARKERS,
+  rightAngleDecorationForPreview,
+  rightAngleGuidePath,
   type PerpendicularPreview,
 } from "./perpendicular";
 import {
@@ -67,11 +76,13 @@ import {
   pointReflectionTargetAt,
   type PointReflectionPreview,
 } from "./pointReflection";
-import type {
-  DiagramDocument,
-  DiagramElement,
-  DiagramTool,
-  Point,
+import {
+  isAssistedLineConstruction,
+  type AssistedLineConstruction,
+  type DiagramDocument,
+  type DiagramElement,
+  type DiagramTool,
+  type Point,
 } from "./types";
 
 type Update = DiagramDocument | ((d: DiagramDocument) => DiagramDocument);
@@ -85,7 +96,11 @@ type Gesture =
       original: DiagramElement;
     }
   | { kind: "tangent"; start: Point }
-  | { kind: "perpendicular"; start: Point }
+  | {
+      kind: "perpendicular";
+      start: Point;
+      mode: AssistedLineConstruction;
+    }
   | { kind: "point-reflection"; start: Point }
   | {
       kind: "move";
@@ -112,6 +127,18 @@ type Gesture =
   | { kind: "connect"; id: string; from: string; start: Point }
   | { kind: "pan"; start: Point; scroll: Point }
   | { kind: "canvas-size"; start: Point; width: number; height: number };
+type TangentPreviewState = {
+  targetId: string;
+  candidates: TangentCandidate[];
+  active: number;
+  line: TangentLinePreview | null;
+};
+
+function isSelectionHandleGesture(gesture: Gesture) {
+  return ["resize", "rotate", "endpoint", "control", "point"].includes(
+    gesture.kind,
+  );
+}
 interface Props {
   document: DiagramDocument;
   tool: DiagramTool;
@@ -197,7 +224,10 @@ export function CurrentCanvas(p: Props) {
     ),
     textRevision = useRef(0);
   const snappedTarget = useRef<SnapTarget | null>(null),
-    gestureTargets = useRef<SnapTarget[]>([]);
+    gestureTargets = useRef<SnapTarget[]>([]),
+    tangentPreviewRef = useRef<TangentPreviewState | null>(null),
+    perpendicularPreviewRef = useRef<PerpendicularPreview | null>(null),
+    disableGridSnapRef = useRef(false);
   const [marquee, setMarquee] = useState<Box | null>(null),
     [snapLines, setSnapLines] = useState<{ x?: number; y?: number }>({}),
     [snapPoint, setSnapPoint] = useState<SnapTarget | null>(null),
@@ -205,11 +235,9 @@ export function CurrentCanvas(p: Props) {
     [context, setContext] = useState<Point | null>(null),
     [polyPreview, setPolyPreview] = useState<Point | null>(null),
     [tangentStart, setTangentStart] = useState<Point | null>(null),
-    [tangentPreview, setTangentPreview] = useState<{
-      targetId: string;
-      candidates: TangentCandidate[];
-      active: number;
-    } | null>(null),
+    [tangentPreview, setTangentPreview] = useState<TangentPreviewState | null>(
+      null,
+    ),
     [perpendicularStart, setPerpendicularStart] = useState<Point | null>(null),
     [perpendicularPreview, setPerpendicularPreview] =
       useState<PerpendicularPreview | null>(null),
@@ -256,10 +284,12 @@ export function CurrentCanvas(p: Props) {
     if (tool !== "tangent") {
       setTangentStart(null);
       setTangentPreview(null);
+      tangentPreviewRef.current = null;
     }
-    if (tool !== "perpendicular") {
+    if (!isAssistedLineConstruction(tool)) {
       setPerpendicularStart(null);
       setPerpendicularPreview(null);
+      perpendicularPreviewRef.current = null;
     }
     if (tool !== "point-reflection") {
       setReflectionStart(null);
@@ -281,54 +311,130 @@ export function CurrentCanvas(p: Props) {
     y: Math.max(0, Math.min(d.height, q.y)),
   });
   const snap = (q: Point, excluded: string[] = selectedIds): Point => {
-    const gridSnap = d.grid.snap;
-    let x = gridSnap ? Math.round(q.x / d.grid.size) * d.grid.size : q.x,
-      y = gridSnap ? Math.round(q.y / d.grid.size) * d.grid.size : q.y;
-    const lines: { x?: number; y?: number } = {};
-    if (d.grid.snapShapes) {
-      let dx = 6 / zoom,
-        dy = 6 / zoom;
-      for (const e of elements) {
-        if (excluded.includes(e.id) || LINE_TYPES.has(e.type)) continue;
-        const b = worldBounds(e);
-        for (const v of [b.x, b.x + b.width / 2, b.x + b.width])
-          if (Math.abs(q.x - v) < dx) {
-            dx = Math.abs(q.x - v);
-            x = v;
-            lines.x = v;
-          }
-        for (const v of [b.y, b.y + b.height / 2, b.y + b.height])
-          if (Math.abs(q.y - v) < dy) {
-            dy = Math.abs(q.y - v);
-            y = v;
-            lines.y = v;
-          }
-      }
-    }
     // An endpoint may snap to its own original crossing without chasing a
     // crossing that changes on each frame of the drag.
     const g = gesture.current,
       endpoint = g?.kind === "endpoint";
-    const mark =
-      g?.kind === "move"
-        ? null
-        : nearestSnapTarget(
-            q,
-            endpoint ? gestureTargets.current : snapTargets,
-            excluded,
-            zoom,
-            endpoint ? g.original.id : undefined,
-          );
-    snappedTarget.current = mark;
-    setSnapPoint(mark);
-    if (mark) {
-      x = mark.point.x;
-      y = mark.point.y;
-      lines.x = x;
-      lines.y = y;
+    const result = snapPointToScene(q, {
+      grid: d.grid,
+      gridEnabled: d.grid.snap && !disableGridSnapRef.current,
+      elements,
+      targets: g?.kind === "move" ? [] : endpoint ? gestureTargets.current : snapTargets,
+      excluded,
+      zoom,
+      ownIntersectionId: endpoint ? g.original.id : undefined,
+    });
+    snappedTarget.current = result.target;
+    setSnapPoint(result.target);
+    setSnapLines(result.guides);
+    return result.point;
+  };
+  const nearestTangentBranch = (
+    pointer: Point,
+    candidates: TangentCandidate[],
+  ) => {
+    let active = -1;
+    let best = Infinity;
+    candidates.forEach((candidate, index) => {
+      const distance = Math.hypot(
+        pointer.x - candidate.contact.x,
+        pointer.y - candidate.contact.y,
+      );
+      if (distance < best) {
+        best = distance;
+        active = index;
+      }
+    });
+    return active;
+  };
+  const updateTangentPreview = (source: Point, pointer: Point) => {
+    const previous = tangentPreviewRef.current;
+    const previousCandidate =
+      previous && previous.active >= 0 ? previous.candidates[previous.active] : null;
+    const retainPrevious =
+      !!previousCandidate &&
+      tangentRetainsCandidateAt(pointer, source, previousCandidate, zoom);
+    const directTarget = retainPrevious
+      ? null
+      : tangentTargetAt(pointer, elements, zoom);
+
+    let next: TangentPreviewState | null = null;
+    if (retainPrevious && previous) {
+      next = {
+        ...previous,
+        line:
+          previous.active >= 0
+            ? tangentLineForPointer(
+                source,
+                previous.candidates[previous.active],
+                pointer,
+                24 / Math.max(zoom, 1e-6),
+              )
+            : null,
+      };
+    } else if (directTarget) {
+      const candidates =
+        previous?.targetId === directTarget.id
+          ? previous.candidates
+          : tangentCandidates(source, directTarget);
+      const active = nearestTangentBranch(pointer, candidates);
+      next = {
+        targetId: directTarget.id,
+        candidates,
+        active,
+        line:
+          active >= 0
+            ? tangentLineForPointer(
+                source,
+                candidates[active],
+                pointer,
+                24 / Math.max(zoom, 1e-6),
+              )
+            : null,
+      };
     }
-    setSnapLines(lines);
-    return { x, y };
+    tangentPreviewRef.current = next;
+    setTangentPreview(next);
+    return next;
+  };
+  const updatePerpendicularPreview = (
+    source: Point,
+    pointer: Point,
+    mode: AssistedLineConstruction,
+  ) => {
+    const previous = perpendicularPreviewRef.current;
+    const scale = Math.max(zoom, 1e-6);
+    const inQuickPick =
+      !!previous &&
+      Math.hypot(pointer.x - previous.foot.x, pointer.y - previous.foot.y) <=
+        30 / scale;
+    const directTarget = inQuickPick
+      ? null
+      : perpendicularTargetAt(pointer, elements, zoom, mode);
+    const retainedTarget =
+      previous &&
+      (inQuickPick ||
+        (!directTarget && perpendicularRetainsTargetAt(pointer, previous, zoom)))
+        ? previous.target
+        : null;
+    const target = retainedTarget ?? directTarget;
+    const base = buildPerpendicularPreview(source, target);
+    const previousEnd =
+      previous && base && previous.target.id === base.target.id
+        ? previous.end
+        : null;
+    const extended = base
+      ? perpendicularLineForPointer(pointer, base, previousEnd, zoom)
+      : null;
+    const next = extended
+      ? {
+          ...extended,
+          marker: perpendicularMarkerAt(pointer, extended, zoom),
+        }
+      : null;
+    perpendicularPreviewRef.current = next;
+    setPerpendicularPreview(next);
+    return next;
   };
   const patch = (id: string, update: Partial<DiagramElement>) =>
     p.onReplace((doc) => ({
@@ -389,6 +495,8 @@ export function CurrentCanvas(p: Props) {
     event.preventDefault();
     event.stopPropagation();
     gesture.current = g;
+    disableGridSnapRef.current =
+      event.altKey && isSelectionHandleGesture(g);
     gestureTargets.current = snapTargets;
     snappedTarget.current = null;
     setSnapPoint(null);
@@ -442,10 +550,13 @@ export function CurrentCanvas(p: Props) {
         setPolyPreview(null);
         setTangentStart(null);
         setTangentPreview(null);
+        tangentPreviewRef.current = null;
         setPerpendicularStart(null);
         setPerpendicularPreview(null);
+        perpendicularPreviewRef.current = null;
         setReflectionStart(null);
         setReflectionPreview(null);
+        disableGridSnapRef.current = false;
         setSnapLines({});
         p.onCancel();
         setContext(null);
@@ -524,16 +635,18 @@ export function CurrentCanvas(p: Props) {
       const start = snap(q, []);
       setTangentStart(start);
       setTangentPreview(null);
+      tangentPreviewRef.current = null;
       p.onSelect([]);
       begin(event, { kind: "tangent", start });
       return;
     }
-    if (tool === "perpendicular") {
+    if (isAssistedLineConstruction(tool)) {
       const start = snap(q, []);
       setPerpendicularStart(start);
       setPerpendicularPreview(null);
+      perpendicularPreviewRef.current = null;
       p.onSelect([]);
-      begin(event, { kind: "perpendicular", start });
+      begin(event, { kind: "perpendicular", start, mode: tool });
       return;
     }
     if (tool === "point-reflection") {
@@ -632,6 +745,8 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     const g = gesture.current;
+    if (g && isSelectionHandleGesture(g))
+      disableGridSnapRef.current = event.altKey;
     if (!g) {
       if (tool !== "select" && tool !== "hand" && !p.editId)
         snap(constrain(raw), []);
@@ -658,35 +773,11 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     if (g.kind === "tangent") {
-      const target = tangentTargetAt(q, elements, zoom);
-      if (!target) {
-        setTangentPreview(null);
-        return;
-      }
-      const candidates =
-        tangentPreview?.targetId === target.id
-          ? tangentPreview.candidates
-          : tangentCandidates(g.start, target);
-      let active = -1,
-        best = Infinity;
-      candidates.forEach((candidate, i) => {
-        const d = Math.hypot(
-          q.x - candidate.contact.x,
-          q.y - candidate.contact.y,
-        );
-        if (d < best) {
-          best = d;
-          active = i;
-        }
-      });
-      setTangentPreview({ targetId: target.id, candidates, active });
+      updateTangentPreview(g.start, q);
       return;
     }
     if (g.kind === "perpendicular") {
-      const target = perpendicularTargetAt(q, elements, zoom);
-      setPerpendicularPreview(
-        buildPerpendicularPreview(g.start, target, d.width, d.height),
-      );
+      updatePerpendicularPreview(g.start, q, g.mode);
       return;
     }
     if (g.kind === "point-reflection") {
@@ -932,27 +1023,14 @@ export function CurrentCanvas(p: Props) {
       ]);
       setMarquee(null);
     } else if (g.kind === "tangent") {
-      const target = tangentTargetAt(q, elements, zoom),
-        candidates = target ? tangentCandidates(g.start, target) : [];
-      if (candidates.length) {
-        const candidate = candidates.reduce((best, current) =>
-          Math.hypot(q.x - current.contact.x, q.y - current.contact.y) <
-          Math.hypot(q.x - best.contact.x, q.y - best.contact.y)
-            ? current
-            : best,
-        );
-        const lineStart = candidate.throughSource
-          ? {
-              x: 2 * g.start.x - candidate.end.x,
-              y: 2 * g.start.y - candidate.end.y,
-            }
-          : g.start;
+      const preview = updateTangentPreview(g.start, q);
+      if (preview?.line) {
         const line = makeElement(
           "line",
-          lineStart.x,
-          lineStart.y,
-          candidate.end.x - lineStart.x,
-          candidate.end.y - lineStart.y,
+          preview.line.start.x,
+          preview.line.start.y,
+          preview.line.end.x - preview.line.start.x,
+          preview.line.end.y - preview.line.start.y,
         );
         p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
         p.onSelect([line.id]);
@@ -960,9 +1038,9 @@ export function CurrentCanvas(p: Props) {
       } else p.onCancel();
       setTangentStart(null);
       setTangentPreview(null);
+      tangentPreviewRef.current = null;
     } else if (g.kind === "perpendicular") {
-      const target = perpendicularTargetAt(q, elements, zoom),
-        preview = buildPerpendicularPreview(g.start, target, d.width, d.height);
+      const preview = updatePerpendicularPreview(g.start, q, g.mode);
       if (preview) {
         const line = makeElement(
           "line",
@@ -971,12 +1049,15 @@ export function CurrentCanvas(p: Props) {
           preview.end.x - preview.start.x,
           preview.end.y - preview.start.y,
         );
+        const rightAngle = rightAngleDecorationForPreview(preview);
+        if (rightAngle) line.rightAngle = rightAngle;
         p.onReplace((doc) => ({ ...doc, elements: [...doc.elements, line] }));
         p.onSelect([line.id]);
         p.onEnd();
       } else p.onCancel();
       setPerpendicularStart(null);
       setPerpendicularPreview(null);
+      perpendicularPreviewRef.current = null;
     } else if (g.kind === "point-reflection") {
       const target = pointReflectionTargetAt(q, elements, snapTargets, zoom),
         preview = buildPointReflectionPreview(g.start, target);
@@ -1021,6 +1102,7 @@ export function CurrentCanvas(p: Props) {
         p.onTool("select");
     }
     gesture.current = null;
+    disableGridSnapRef.current = false;
     snappedTarget.current = null;
     gestureTargets.current = [];
     setSnapPoint(null);
@@ -1124,10 +1206,13 @@ export function CurrentCanvas(p: Props) {
               setDragging(false);
               setTangentStart(null);
               setTangentPreview(null);
+              tangentPreviewRef.current = null;
               setPerpendicularStart(null);
               setPerpendicularPreview(null);
+              perpendicularPreviewRef.current = null;
               setReflectionStart(null);
               setReflectionPreview(null);
+              disableGridSnapRef.current = false;
               setSnapLines({});
               p.onCancel();
             }}
@@ -1208,25 +1293,37 @@ export function CurrentCanvas(p: Props) {
                     stroke="#348b57"
                     strokeWidth={1.2 / zoom}
                   />
-                  {tangentPreview?.candidates.map((candidate, i) => (
-                    <g key={`${candidate.contact.x}-${candidate.contact.y}-${i}`}>
-                      <path
-                        d={`M${candidate.throughSource ? 2 * tangentStart.x - candidate.end.x : tangentStart.x} ${candidate.throughSource ? 2 * tangentStart.y - candidate.end.y : tangentStart.y}L${candidate.end.x} ${candidate.end.y}`}
-                        fill="none"
-                        stroke={i === tangentPreview.active ? "#2f9e5b" : "#8cb99a"}
-                        strokeWidth={(i === tangentPreview.active ? 1.7 : 0.9) / zoom}
-                        strokeDasharray={i === tangentPreview.active ? undefined : `${4 / zoom} ${3 / zoom}`}
-                      />
-                      <circle
-                        cx={candidate.contact.x}
-                        cy={candidate.contact.y}
-                        r={(i === tangentPreview.active ? 4 : 3) / zoom}
-                        fill={i === tangentPreview.active ? "#2f9e5b" : "white"}
-                        stroke="#2f9e5b"
-                        strokeWidth={1 / zoom}
-                      />
-                    </g>
-                  ))}
+                  {tangentPreview?.candidates.map((candidate, i) => {
+                    const active = i === tangentPreview.active;
+                    const line =
+                      active && tangentPreview.line
+                        ? tangentPreview.line
+                        : tangentLineForPointer(
+                            tangentStart,
+                            candidate,
+                            candidate.end,
+                            24 / Math.max(zoom, 1e-6),
+                          );
+                    return (
+                      <g key={`${candidate.contact.x}-${candidate.contact.y}-${i}`}>
+                        <path
+                          d={`M${line.start.x} ${line.start.y}L${line.end.x} ${line.end.y}`}
+                          fill="none"
+                          stroke={active ? "#2f9e5b" : "#8cb99a"}
+                          strokeWidth={(active ? 1.7 : 0.9) / zoom}
+                          strokeDasharray={active ? undefined : `${4 / zoom} ${3 / zoom}`}
+                        />
+                        <circle
+                          cx={candidate.contact.x}
+                          cy={candidate.contact.y}
+                          r={(active ? 4 : 3) / zoom}
+                          fill={active ? "#2f9e5b" : "white"}
+                          stroke="#2f9e5b"
+                          strokeWidth={1 / zoom}
+                        />
+                      </g>
+                    );
+                  })}
                   {tangentPreview && tangentPreview.candidates.length === 0 && (
                     <text
                       x={tangentStart.x + 10 / zoom}
@@ -1266,6 +1363,35 @@ export function CurrentCanvas(p: Props) {
                         stroke="#2f9e5b"
                         strokeWidth={1.7 / zoom}
                       />
+                      {perpendicularPreview.mode === "angle-bisector" &&
+                        perpendicularPreview.secondTarget && (
+                          <path
+                            d={`M${perpendicularPreview.secondTarget.a.x} ${perpendicularPreview.secondTarget.a.y}L${perpendicularPreview.secondTarget.b.x} ${perpendicularPreview.secondTarget.b.y}`}
+                            fill="none"
+                            stroke="#8cb99a"
+                            strokeWidth={1.2 / zoom}
+                          />
+                        )}
+                      {perpendicularPreview.mode !== "angle-bisector" &&
+                        RIGHT_ANGLE_MARKERS.map((marker) => {
+                          const active = perpendicularPreview.marker === marker;
+                          return (
+                            <path
+                              key={marker}
+                              d={rightAngleGuidePath(
+                                perpendicularPreview,
+                                marker,
+                                9 / zoom,
+                              )}
+                              fill="none"
+                              stroke={active ? "#23864d" : "#9dc6a9"}
+                              strokeWidth={(active ? 2.3 : 1.05) / zoom}
+                              opacity={active ? 1 : 0.78}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          );
+                        })}
                       <circle
                         cx={perpendicularPreview.foot.x}
                         cy={perpendicularPreview.foot.y}
