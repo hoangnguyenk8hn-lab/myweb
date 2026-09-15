@@ -32,7 +32,7 @@ import {
 } from "./intersectionPairs";
 import { DEFAULT_PLOT } from "./plotting";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
-import { straightLineTargets } from "./constructionTargets";
+import { selectedStraightLineTargetIds } from "./constructionTargets";
 import {
   LINE_TYPES,
   resolveElement,
@@ -96,6 +96,7 @@ export function CurrentDiagramEditor() {
   const loadHistory = history.load;
   const [tool, setTool] = useState<DiagramTool>("select"),
     [selectedIds, setSelectedIds] = useState<string[]>([]),
+    [angleBisectorTargetIds, setAngleBisectorTargetIds] = useState<string[]>([]),
     [zoom, setZoom] = useState(1),
     [guides, setGuides] = useState(false),
     [editId, setEditId] = useState<string | null>(null),
@@ -678,12 +679,16 @@ export function CurrentDiagramEditor() {
                   history.endGesture();
                   setEditId(null);
                 }
+                setAngleBisectorTargetIds(
+                  next === "angle-bisector"
+                    ? selectedStraightLineTargetIds(
+                        d.elements,
+                        selectedIds,
+                      )
+                    : [],
+                );
                 setTool(next);
-                const keepBisectorTargets =
-                  next === "angle-bisector" &&
-                  selected.length === 2 &&
-                  straightLineTargets(selected).length === 2;
-                if (!keepBisectorTargets) setSelectedIds([]);
+                setSelectedIds([]);
               }}
               onImage={() => imageInput.current?.click()}
               onPlot={newPlot}
@@ -718,6 +723,7 @@ export function CurrentDiagramEditor() {
                 document={d}
                 tool={tool}
                 selectedIds={selectedIds}
+                angleBisectorTargetIds={angleBisectorTargetIds}
                 onSelect={select}
                 onTool={canvasTool}
                 onReplace={history.replace}

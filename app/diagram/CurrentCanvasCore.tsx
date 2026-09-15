@@ -49,7 +49,6 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
-import { straightLineTargets } from "./constructionTargets";
 import {
   tangentCandidates,
   tangentLineForPointer,
@@ -148,6 +147,7 @@ interface Props {
   document: DiagramDocument;
   tool: DiagramTool;
   selectedIds: string[];
+  angleBisectorTargetIds: string[];
   onSelect: (ids: string[]) => void;
   onTool: (tool: DiagramTool) => void;
   onReplace: (next: Update) => void;
@@ -639,12 +639,6 @@ export function CurrentCanvas(p: Props) {
     }
     if (isAssistedLineConstruction(tool)) {
       const start = snap(q, []);
-      const selectedTargets =
-        tool === "angle-bisector" && selectedIds.length === 2
-          ? straightLineTargets(
-              elements.filter((element) => selectedIds.includes(element.id)),
-            )
-          : [];
       setPerpendicularStart(start);
       setPerpendicularPreview(null);
       perpendicularPreviewRef.current = null;
@@ -654,8 +648,8 @@ export function CurrentCanvas(p: Props) {
         start,
         mode: tool,
         targetIds:
-          selectedTargets.length === 2
-            ? selectedTargets.map((target) => target.id)
+          tool === "angle-bisector" && p.angleBisectorTargetIds.length === 2
+            ? p.angleBisectorTargetIds
             : undefined,
       });
       return;

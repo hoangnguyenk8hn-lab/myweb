@@ -35,6 +35,10 @@ const { migrateDocument } = require("../app/diagram/documentMigration.ts");
 const { documentsEqual } = require("../app/diagram/currentHistory.ts");
 const { ELEMENT_TYPES, isElementType } = require("../app/diagram/types.ts");
 const { moveLineEndpoint } = require("../app/diagram/sceneGeometry.ts");
+const {
+  selectedStraightLineTargetIds,
+  straightLineTargets,
+} = require("../app/diagram/constructionTargets.ts");
 const near = (actual, expected, tolerance = 1e-7) =>
   Object.entries(expected).forEach(([key, value]) =>
     assert.ok(
@@ -106,6 +110,22 @@ test("angle bisector can target the two selected outer rays among three", () => 
     x: Math.SQRT1_2,
     y: Math.SQRT1_2,
   });
+});
+
+test("selected bisector targets are captured separately from selection handles", () => {
+  const first = makeElement("line", 100, 100, 100, 0),
+    second = makeElement("arrow", 100, 100, 0, 100),
+    middle = makeElement("line", 100, 100, 80, 80),
+    elements = [first, second, middle];
+  assert.deepEqual(
+    selectedStraightLineTargetIds(elements, [first.id, second.id]),
+    [first.id, second.id],
+  );
+  assert.equal(straightLineTargets([second]).length, 1);
+  assert.deepEqual(
+    selectedStraightLineTargetIds(elements, [first.id, second.id, middle.id]),
+    [],
+  );
 });
 
 test("perpendicular construction always ends at the foot and stays a Line", () => {
