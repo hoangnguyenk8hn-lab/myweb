@@ -25,6 +25,7 @@ import {
   type Bounds,
 } from "./pathBounds";
 import { shapePath } from "./shapes";
+import { isExtendedLineIntersectionPair } from "./intersectionPairs";
 import {
   lineIntersection,
   segmentIntersection,
@@ -392,7 +393,11 @@ export function collectIntersections(
       const b = straight[j],
         fromA = wantsIntersection(a.e, b.e),
         fromB = wantsIntersection(b.e, a.e);
-      if (!(fromA || fromB)) continue;
+      if (
+        !(fromA || fromB) ||
+        !isExtendedLineIntersectionPair(a.e, b.e)
+      )
+        continue;
       const point = lineIntersection(a.segment, b.segment);
       if (
         !point ||

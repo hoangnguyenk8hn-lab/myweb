@@ -55,6 +55,10 @@ const { svgPathAnchors } = require("../app/diagram/pathBounds.ts");
 const { elementStrokeMetrics } = require("../app/diagram/strokeStyle.ts");
 const { tangentCandidates } = require("../app/diagram/tangents.ts");
 const {
+  isExtendedLineIntersectionPair,
+  toggleExtendedLineIntersectionPair,
+} = require("../app/diagram/intersectionPairs.ts");
+const {
   absolutePoints,
   curvePoint,
   movePolygonPoint,
@@ -105,10 +109,27 @@ test("parabola tangent at its vertex is horizontal", () => {
 test("Intersection uses the infinite supporting lines of straight Lines", () => {
   const horizontal = makeElement("line", 0, 40, 30, 0);
   horizontal.intersection = true;
-  const vertical = makeElement("line", 80, 70, 0, 30);
-  const marks = collectIntersections([horizontal, vertical]);
+  const vertical = makeElement("line", 80, 70, 0, 30),
+    unrelated = makeElement("line", 120, 70, 0, 30);
+  assert.equal(
+    collectIntersections([horizontal, vertical, unrelated]).length,
+    0,
+  );
+
+  const linked = toggleExtendedLineIntersectionPair(
+    [horizontal, vertical, unrelated],
+    [horizontal.id, vertical.id],
+  );
+  assert.equal(isExtendedLineIntersectionPair(linked[0], linked[1]), true);
+  const marks = collectIntersections(linked);
   assert.equal(marks.length, 1);
   near(marks[0].point, { x: 80, y: 40 });
+
+  const removed = toggleExtendedLineIntersectionPair(linked, [
+    horizontal.id,
+    vertical.id,
+  ]);
+  assert.equal(collectIntersections(removed).length, 0);
 });
 
 test("Option endpoint drop keeps the committed point on the original line", () => {

@@ -9,6 +9,10 @@ import {
 } from "./EditorControls";
 import { ColorControl } from "./ColorPicker";
 import { DEFAULT_INTERSECTION_MARKER_SIZE } from "./intersections";
+import {
+  isExtendedLineIntersectionPair,
+  supportsExtendedLineIntersection,
+} from "./intersectionPairs";
 import { hasArrowHead } from "./lineMarkers";
 import { isCurve, LINE_TYPES, TEXT_TYPES } from "./sceneGeometry";
 import type {
@@ -90,6 +94,11 @@ export function EditorToolbar({
   const e = selected[0],
     line = e && LINE_TYPES.has(e.type),
     text = e && TEXT_TYPES.has(e.type),
+    extendedPairAvailable =
+      selected.length === 2 && selected.every(supportsExtendedLineIntersection),
+    extendedPairActive =
+      extendedPairAvailable &&
+      isExtendedLineIntersectionPair(selected[0], selected[1]),
     intersectionDefaultPatch =
       e?.intersectionMarkerSize === undefined && e?.intersectionSize === undefined
         ? { intersectionMarkerSize: DEFAULT_INTERSECTION_MARKER_SIZE }
@@ -457,14 +466,28 @@ export function EditorToolbar({
             }
           >
             <p className="intersection-help">
-              Bật Intersection để tạo các điểm bắt tại chỗ cắt nhau. Chọn ∅ để
-              ẩn dấu giao điểm nhưng vẫn giữ khả năng bắt điểm.
+              Intersection chỉ tạo điểm tại chỗ hai nét thực sự cắt nhau. Muốn
+              lấy giao điểm đường kéo dài, Shift chọn đúng 2 Line/Arrow rồi dùng
+              nút bên dưới. Chọn ∅ để ẩn dấu nhưng vẫn bắt điểm.
             </p>
+            <button
+              type="button"
+              className="menu-row"
+              disabled={!extendedPairAvailable}
+              aria-pressed={extendedPairActive}
+              title="Chỉ áp dụng cho đúng cặp Line/Arrow đang chọn"
+              onClick={command("extended-line-intersection")}
+            >
+              {extendedPairActive ? "Bỏ giao điểm" : "Giao điểm 2 đường kéo dài"}
+            </button>
             <label className="menu-check">
               <input
                 type="checkbox"
                 checked={selected.every(
-                  (item) => !!item.intersection && !item.blockIntersection,
+                  (item) =>
+                    !!item.intersection &&
+                    item.intersectionWith === undefined &&
+                    !item.blockIntersection,
                 )}
                 onChange={(ev) =>
                   onPatch({
@@ -475,7 +498,7 @@ export function EditorToolbar({
                   })
                 }
               />
-              Intersection
+              Giao điểm nét thật
             </label>
             <div className="intersection-symbols">
               {(["circle", "dot", "cross"] as const).map((kind) => (
@@ -490,7 +513,6 @@ export function EditorToolbar({
                   onClick={() =>
                     onPatch({
                       intersection: true,
-                      intersectionWith: undefined,
                       blockIntersection: false,
                       intersectionKind: kind,
                       intersectionHidden: false,
@@ -508,7 +530,6 @@ export function EditorToolbar({
                 onClick={() =>
                   onPatch({
                     intersection: true,
-                    intersectionWith: undefined,
                     blockIntersection: false,
                     intersectionHidden: true,
                     ...intersectionDefaultPatch,

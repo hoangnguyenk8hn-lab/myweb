@@ -25,6 +25,11 @@ import {
   type ImageOptions,
 } from "./currentExporters";
 import { storeImageAsset } from "./imageAssets";
+import {
+  isExtendedLineIntersectionPair,
+  supportsExtendedLineIntersection,
+  toggleExtendedLineIntersectionPair,
+} from "./intersectionPairs";
 import { DEFAULT_PLOT } from "./plotting";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
 import {
@@ -392,6 +397,32 @@ export function CurrentDiagramEditor() {
       case "duplicate":
         addCopies(selected);
         break;
+      case "extended-line-intersection": {
+        if (
+          selected.length !== 2 ||
+          !selected.every(supportsExtendedLineIntersection)
+        ) {
+          report("Hãy Shift chọn đúng 2 Line hoặc Arrow.");
+          break;
+        }
+        const removing = isExtendedLineIntersectionPair(
+          selected[0],
+          selected[1],
+        );
+        history.commit((doc) => ({
+          ...doc,
+          elements: toggleExtendedLineIntersectionPair(
+            doc.elements,
+            selected.map((element) => element.id),
+          ),
+        }));
+        report(
+          removing
+            ? "Đã bỏ giao điểm của hai đường kéo dài."
+            : "Đã tạo giao điểm của hai đường kéo dài.",
+        );
+        break;
+      }
       case "group":
         if (selected.length > 1) patch({ groupId: createId("group") });
         break;
