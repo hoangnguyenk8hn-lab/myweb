@@ -22,9 +22,11 @@ import { PaintDefinition } from "./PaintDefinition";
 import {
   hasArrowHead,
   isRightAngleMarker,
+  markerReferenceX,
   rightAngleDecorationPath,
 } from "./lineMarkers";
 import { resolveImageAsset } from "./imageAssets";
+import { elementStrokeMetrics } from "./strokeStyle";
 
 export function MarkerGlyph({
   type,
@@ -108,14 +110,7 @@ export function SceneElement({
     c = center(e),
     b = sceneBounds(e),
     shapeId = elementShapeId(e),
-    directVectorStroke =
-      LINE_TYPES.has(e.type) ||
-      TEXT_TYPES.has(e.type) ||
-      ["polyline", "polycurve", "freehand"].includes(e.type),
-    smoothScaledCircle = !directVectorStroke && shapeId === "circle",
-    circleScale = smoothScaledCircle
-      ? Math.max(1e-8, (Math.abs(e.width) + Math.abs(e.height)) / 200)
-      : 1;
+    strokeMetrics = elementStrokeMetrics(e);
   const id = e.id.replace(/[^a-zA-Z0-9_-]/g, "");
   const paintId = `paint-${id}`;
   const common = {
@@ -125,16 +120,11 @@ export function SceneElement({
       : s.fill === "transparent"
         ? "none"
         : s.fill,
-    strokeWidth: smoothScaledCircle ? s.strokeWidth / circleScale : s.strokeWidth,
-    strokeDasharray:
-      s.dash === "dashed" ? "6 4" : s.dash === "dotted" ? "1 3" : undefined,
+    strokeWidth: strokeMetrics.width,
+    strokeDasharray: strokeMetrics.dash,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     shapeRendering: "geometricPrecision" as const,
-    vectorEffect:
-      directVectorStroke || smoothScaledCircle
-        ? undefined
-        : ("non-scaling-stroke" as const),
   };
   const transform = elementTransform(e);
   const markerSize = markerDimension(e, "mid");
@@ -177,7 +167,7 @@ export function SceneElement({
       key={position}
       id={`${position}-${id}`}
       viewBox="0 0 10 10"
-      refX="8"
+      refX={markerReferenceX(head)}
       refY="5"
       markerWidth={markerDimension(e, position === "tail" ? "start" : "end")}
       markerHeight={markerDimension(e, position === "tail" ? "start" : "end")}

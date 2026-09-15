@@ -25,6 +25,7 @@ const {
 } = require("../app/diagram/assistedLine.ts");
 const {
   hasArrowHead,
+  markerReferenceX,
   rightAngleDecorationPath,
   rightAngleMarkerPath,
 } = require("../app/diagram/lineMarkers.ts");
@@ -104,6 +105,12 @@ test("right-angle decorations keep the same 4/10 glyph size as legacy endHead", 
     ),
     "M100 0L100 -3.6L96.4 -3.6L96.4 0",
   );
+});
+
+test("round endpoint markers anchor at their visual center", () => {
+  assert.equal(markerReferenceX("dot"), 5);
+  assert.equal(markerReferenceX("circle"), 5);
+  assert.equal(markerReferenceX("arrow"), 8);
 });
 
 test("perpendicular preview guides stay large while committed marks use legacy size", () => {

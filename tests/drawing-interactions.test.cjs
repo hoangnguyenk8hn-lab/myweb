@@ -52,6 +52,8 @@ const {
   translationSnap,
 } = require("../app/diagram/snapping.ts");
 const { svgPathAnchors } = require("../app/diagram/pathBounds.ts");
+const { elementStrokeMetrics } = require("../app/diagram/strokeStyle.ts");
+const { tangentCandidates } = require("../app/diagram/tangents.ts");
 const {
   absolutePoints,
   curvePoint,
@@ -71,6 +73,56 @@ function curvePoints(e) {
   ].map((p) => worldPoint(p, e));
 }
 const offset = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+
+test("library shapes render with the same visible stroke metrics as Line", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  line.style.strokeWidth = 2;
+  line.style.dash = "dashed";
+  assert.deepEqual(elementStrokeMetrics(line), { width: 2, dash: "6 4" });
+
+  for (const name of ["square", "rectangle", "regular-polygon", "quadratic"]) {
+    const shape = makeElement(`shape:${name}`, 0, 0, 200, 100);
+    shape.style.strokeWidth = 2;
+    shape.style.dash = "dashed";
+    const tileScale = (Math.abs(shape.width) + Math.abs(shape.height)) / 200;
+    assert.deepEqual(elementStrokeMetrics(shape), {
+      width: 2 / tileScale,
+      dash: `${6 / tileScale} ${4 / tileScale}`,
+    });
+  }
+});
+
+test("parabola tangent at its vertex is horizontal", () => {
+  const parabola = makeElement("shape:quadratic", 0, 0, 100, 100);
+  const candidates = tangentCandidates({ x: 50, y: 90 }, parabola);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].throughSource, true);
+  near(candidates[0].contact, { x: 50, y: 90 });
+  near(candidates[0].end, { y: 90 });
+  assert.ok(Math.abs(candidates[0].end.x - 50) > 90);
+});
+
+test("Intersection uses the infinite supporting lines of straight Lines", () => {
+  const horizontal = makeElement("line", 0, 40, 30, 0);
+  horizontal.intersection = true;
+  const vertical = makeElement("line", 80, 70, 0, 30);
+  const marks = collectIntersections([horizontal, vertical]);
+  assert.equal(marks.length, 1);
+  near(marks[0].point, { x: 80, y: 40 });
+});
+
+test("Option endpoint drop keeps the committed point on the original line", () => {
+  const line = makeElement("line", 10, 20, 100, 0);
+  const dropped = dropLineEndpoint(
+    line,
+    1,
+    { x: 170, y: 95 },
+    null,
+    undefined,
+    { altKey: true },
+  );
+  near(lineVertices(dropped)[1], { x: 170, y: 20 });
+});
 
 test("creating shapes anchors the same visible corner in every drag direction", () => {
   const start = { x: 210, y: 180 };

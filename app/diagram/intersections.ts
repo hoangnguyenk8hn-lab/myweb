@@ -8,6 +8,7 @@ import {
   isCurve,
   curvePoint,
   linePath,
+  lineVertices,
   LINE_TYPES,
   polycurvePath,
   sceneBounds,
@@ -25,6 +26,7 @@ import {
 } from "./pathBounds";
 import { shapePath } from "./shapes";
 import {
+  lineIntersection,
   segmentIntersection,
   subtract,
 } from "./geometryKernel";
@@ -87,8 +89,9 @@ export function dropLineEndpoint(
   point: Point,
   mark: { point: Point } | null,
   nodeId?: string,
+  modifiers: { altKey?: boolean } = {},
 ): DiagramElement {
-  const next = moveLineEndpoint(e, index, mark?.point ?? point);
+  const next = moveLineEndpoint(e, index, mark?.point ?? point, modifiers);
   return !mark && nodeId
     ? { ...next, [index === 0 ? "fromId" : "toId"]: nodeId }
     : next;
@@ -363,6 +366,45 @@ export function collectIntersections(
         )
           marks.push({ point: p, owner, ids: [a.e.id, b.e.id] });
       }
+    }
+  }
+
+  // A Line represents a mathematical supporting line for Intersection marks.
+  // Keep the contour pass above for every other object, then add crossings of
+  // two unextended straight Lines even when their finite bounds do not overlap.
+  const straight = entries.flatMap((entry) => {
+    if (!["line", "arrow"].includes(entry.e.type)) return [];
+    const vertices = lineVertices(entry.e);
+    if (vertices.length !== 2) return [];
+    return [
+      {
+        ...entry,
+        segment: [
+          worldPoint(vertices[0], entry.e),
+          worldPoint(vertices[1], entry.e),
+        ] as Segment,
+      },
+    ];
+  });
+  for (let i = 0; i < straight.length; i++) {
+    const a = straight[i];
+    for (let j = i + 1; j < straight.length; j++) {
+      const b = straight[j],
+        fromA = wantsIntersection(a.e, b.e),
+        fromB = wantsIntersection(b.e, a.e);
+      if (!(fromA || fromB)) continue;
+      const point = lineIntersection(a.segment, b.segment);
+      if (
+        !point ||
+        inBreak(point, a.e) ||
+        inBreak(point, b.e) ||
+        marks.some(
+          (mark) => Math.hypot(mark.point.x - point.x, mark.point.y - point.y) < 0.15,
+        )
+      )
+        continue;
+      const owner = fromA && (!fromB || a.index > b.index) ? a.e : b.e;
+      marks.push({ point, owner, ids: [a.e.id, b.e.id] });
     }
   }
   return marks;

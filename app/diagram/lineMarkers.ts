@@ -37,6 +37,11 @@ export function hasArrowHead(marker: ArrowHead | null | undefined) {
   return !!marker && marker !== "none" && !isRightAngleMarker(marker);
 }
 
+/** Filled/outlined endpoint circles are centered in their 10-unit marker tile. */
+export function markerReferenceX(marker: ArrowHead) {
+  return marker === "dot" || marker === "circle" ? 5 : 8;
+}
+
 export function rightAngleMarkerPath(
   point: Point,
   direction: Point,

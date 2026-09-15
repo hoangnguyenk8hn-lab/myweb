@@ -194,6 +194,76 @@ function ellipseTangents(
   ];
 }
 
+function realQuadraticRoots(a: number, b: number, c: number) {
+  const scale = Math.max(Math.abs(a), Math.abs(b), Math.abs(c), 1);
+  if (Math.abs(a) <= 1e-12 * scale)
+    return Math.abs(b) <= 1e-12 * scale ? [] : [-c / b];
+  let discriminant = b * b - 4 * a * c;
+  const tolerance = 1e-12 * Math.max(b * b, Math.abs(4 * a * c), 1);
+  if (discriminant < -tolerance) return [];
+  if (Math.abs(discriminant) <= tolerance) discriminant = 0;
+  const root = Math.sqrt(Math.max(0, discriminant));
+  return root === 0
+    ? [-b / (2 * a)]
+    : [(-b - root) / (2 * a), (-b + root) / (2 * a)];
+}
+
+/**
+ * Solve tangents to the quadratic shape analytically. The sampled-path solver
+ * cannot reliably detect the double root produced when the source is exactly
+ * on the parabola (notably at its vertex).
+ */
+function quadraticTangents(
+  source: Point,
+  target: DiagramElement,
+): TangentCandidate[] | null {
+  if (elementShapeId(target) !== "quadratic") return null;
+  const { matrix } = elementContour(target);
+  const p0 = transformPoint({ x: 5, y: 5 }, matrix),
+    p1 = transformPoint({ x: 50, y: 175 }, matrix),
+    p2 = transformPoint({ x: 95, y: 5 }, matrix),
+    linear = { x: 2 * (p1.x - p0.x), y: 2 * (p1.y - p0.y) },
+    quadratic = {
+      x: p0.x - 2 * p1.x + p2.x,
+      y: p0.y - 2 * p1.y + p2.y,
+    },
+    offset = { x: p0.x - source.x, y: p0.y - source.y };
+  const roots = realQuadraticRoots(
+    cross(linear, quadratic),
+    2 * cross(offset, quadratic),
+    cross(offset, linear),
+  );
+  const uniqueRoots: number[] = [];
+  for (const raw of roots) {
+    const t = Math.min(1, Math.max(0, raw));
+    if (
+      raw < -1e-8 ||
+      raw > 1 + 1e-8 ||
+      uniqueRoots.some((candidate) => Math.abs(candidate - t) < 1e-7)
+    )
+      continue;
+    uniqueRoots.push(t);
+  }
+  return uniqueRoots.map((t) => {
+    const contact = {
+        x: p0.x + linear.x * t + quadratic.x * t * t,
+        y: p0.y + linear.y * t + quadratic.y * t * t,
+      },
+      direction = {
+        x: linear.x + 2 * quadratic.x * t,
+        y: linear.y + 2 * quadratic.y * t,
+      },
+      throughSource = distance(source, contact) < 0.6;
+    return {
+      contact,
+      end: throughSource
+        ? tangentEnd(source, source, direction)
+        : tangentEnd(source, contact, direction),
+      throughSource,
+    };
+  });
+}
+
 export function supportsTangents(target: DiagramElement) {
   const shape = elementShapeId(target);
   return (
@@ -336,6 +406,8 @@ export function tangentCandidates(
 ): TangentCandidate[] {
   const ellipse = ellipseTangents(source, target);
   if (ellipse !== null) return ellipse;
+  const quadratic = quadraticTangents(source, target);
+  if (quadratic !== null) return quadratic;
   return supportsTangents(target) ? numericPathTangents(source, target) : [];
 }
 

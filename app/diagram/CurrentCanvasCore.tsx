@@ -116,9 +116,15 @@ type Gesture =
     }
   | { kind: "rotate"; center: Point; angle: number; original: DiagramElement }
   | {
-      kind: "control" | "endpoint" | "point";
+      kind: "control" | "point";
       index: number;
       original: DiagramElement;
+    }
+  | {
+      kind: "endpoint";
+      index: number;
+      original: DiagramElement;
+      constrainToAxis?: boolean;
     }
   | { kind: "marquee"; start: Point; add: string[] }
   | { kind: "connect"; id: string; from: string; start: Point }
@@ -487,6 +493,7 @@ export function CurrentCanvas(p: Props) {
   const begin = (event: ReactPointerEvent, g: Gesture) => {
     event.preventDefault();
     event.stopPropagation();
+    if (g.kind === "endpoint" && event.altKey) g.constrainToAxis = true;
     gesture.current = g;
     disableGridSnapRef.current =
       event.altKey && isSelectionHandleGesture(g);
@@ -729,8 +736,10 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     const g = gesture.current;
+    if (g?.kind === "endpoint" && event.altKey) g.constrainToAxis = true;
     if (g && isSelectionHandleGesture(g))
-      disableGridSnapRef.current = event.altKey;
+      disableGridSnapRef.current =
+        event.altKey || (g.kind === "endpoint" && !!g.constrainToAxis);
     if (!g) {
       if (tool !== "select" && tool !== "hand" && !editId)
         snap(constrain(raw), []);
@@ -956,7 +965,7 @@ export function CurrentCanvas(p: Props) {
       patch(
         g.original.id,
         moveLineEndpoint(g.original, g.index, snap(q, [g.original.id]), {
-          altKey: event.altKey,
+          altKey: g.constrainToAxis,
         }),
       );
       return;
@@ -1066,19 +1075,25 @@ export function CurrentCanvas(p: Props) {
           }),
         );
       if (g.kind === "endpoint") {
-        const end = snap(q, [g.original.id]);
-        const target = targetNode(q, [
-          g.original.id,
-          g.index === 0 ? (g.original.toId ?? "") : (g.original.fromId ?? ""),
-        ]);
+        const constrained = !!g.constrainToAxis,
+          end = constrained ? q : snap(q, [g.original.id]),
+          target = constrained
+            ? null
+            : targetNode(q, [
+                g.original.id,
+                g.index === 0
+                  ? (g.original.toId ?? "")
+                  : (g.original.fromId ?? ""),
+              ]);
         patch(
           g.original.id,
           dropLineEndpoint(
             g.original,
             g.index,
             end,
-            snappedTarget.current,
+            constrained ? null : snappedTarget.current,
             target?.id,
+            { altKey: constrained },
           ),
         );
       }

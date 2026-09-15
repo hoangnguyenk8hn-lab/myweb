@@ -42,6 +42,17 @@ export function projectPointToLine(point: Point, a: Point, b: Point) {
   return { x: a.x + t * delta.x, y: a.y + t * delta.y };
 }
 
+/** Intersection of the two infinite supporting lines, not just the segments. */
+export function lineIntersection([a, b]: Segment, [c, d]: Segment): Point | null {
+  const r = subtract(b, a),
+    s = subtract(d, c),
+    denominator = cross(r, s),
+    scale = Math.max(Math.hypot(r.x, r.y) * Math.hypot(s.x, s.y), 1);
+  if (Math.abs(denominator) <= GEOMETRY_EPSILON * scale) return null;
+  const t = cross(subtract(c, a), s) / denominator;
+  return { x: a.x + t * r.x, y: a.y + t * r.y };
+}
+
 /** Shared endpoints count once; coincident runs have no isolated crossing. */
 export function segmentIntersection(
   [a, b]: Segment,
