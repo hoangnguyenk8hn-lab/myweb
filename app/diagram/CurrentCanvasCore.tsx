@@ -49,6 +49,7 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
+import { straightLineTargets } from "./constructionTargets";
 import {
   tangentCandidates,
   tangentLineForPointer,
@@ -97,6 +98,7 @@ type Gesture =
       kind: "perpendicular";
       start: Point;
       mode: AssistedLineConstruction;
+      targetIds?: string[];
     }
   | { kind: "point-reflection"; start: Point }
   | {
@@ -413,6 +415,7 @@ export function CurrentCanvas(p: Props) {
     source: Point,
     pointer: Point,
     mode: AssistedLineConstruction,
+    targetIds?: string[],
   ) => {
     const previous = perpendicularPreviewRef.current;
     const scale = Math.max(zoom, 1e-6);
@@ -420,9 +423,13 @@ export function CurrentCanvas(p: Props) {
       !!previous &&
       Math.hypot(pointer.x - previous.foot.x, pointer.y - previous.foot.y) <=
         30 / scale;
+    const targetElements =
+      mode === "angle-bisector" && targetIds?.length === 2
+        ? elements.filter((element) => targetIds.includes(element.id))
+        : elements;
     const directTarget = inQuickPick
       ? null
-      : assistedLineTargetAt(mode, pointer, elements, zoom);
+      : assistedLineTargetAt(mode, pointer, targetElements, zoom);
     const retainedTarget =
       previous &&
       (inQuickPick ||
@@ -632,11 +639,25 @@ export function CurrentCanvas(p: Props) {
     }
     if (isAssistedLineConstruction(tool)) {
       const start = snap(q, []);
+      const selectedTargets =
+        tool === "angle-bisector" && selectedIds.length === 2
+          ? straightLineTargets(
+              elements.filter((element) => selectedIds.includes(element.id)),
+            )
+          : [];
       setPerpendicularStart(start);
       setPerpendicularPreview(null);
       perpendicularPreviewRef.current = null;
       p.onSelect([]);
-      begin(event, { kind: "perpendicular", start, mode: tool });
+      begin(event, {
+        kind: "perpendicular",
+        start,
+        mode: tool,
+        targetIds:
+          selectedTargets.length === 2
+            ? selectedTargets.map((target) => target.id)
+            : undefined,
+      });
       return;
     }
     if (tool === "point-reflection") {
@@ -770,7 +791,7 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     if (g.kind === "perpendicular") {
-      updatePerpendicularPreview(g.start, q, g.mode);
+      updatePerpendicularPreview(g.start, q, g.mode, g.targetIds);
       return;
     }
     if (g.kind === "point-reflection") {
@@ -1037,7 +1058,12 @@ export function CurrentCanvas(p: Props) {
       setTangentPreview(null);
       tangentPreviewRef.current = null;
     } else if (g.kind === "perpendicular") {
-      const preview = updatePerpendicularPreview(g.start, q, g.mode);
+      const preview = updatePerpendicularPreview(
+        g.start,
+        q,
+        g.mode,
+        g.targetIds,
+      );
       if (preview) {
         const line = makeElement(
           "line",

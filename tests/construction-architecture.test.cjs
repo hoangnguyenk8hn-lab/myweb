@@ -67,6 +67,47 @@ test("angle bisector is an explicit request and cannot leak into perpendicular",
   assert.equal(perpendicularTarget?.id, horizontal.id);
 });
 
+test("angle bisector can target the two selected outer rays among three", () => {
+  const horizontal = makeElement("line", 100, 100, 160, 0),
+    middle = makeElement("line", 100, 100, 120, 120),
+    vertical = makeElement("line", 100, 100, 0, 160),
+    source = { x: 100, y: 100 },
+    pointer = { x: 140, y: 145 };
+
+  const automatic = assistedLinePreview(
+    source,
+    assistedLineTargetAt(
+      "angle-bisector",
+      pointer,
+      [horizontal, middle, vertical],
+      1,
+    ),
+  );
+  assert.ok(automatic);
+  assert.ok(
+    [automatic.target.id, automatic.secondTarget.id].includes(middle.id),
+  );
+
+  const selectedOuter = assistedLinePreview(
+    source,
+    assistedLineTargetAt(
+      "angle-bisector",
+      pointer,
+      [horizontal, vertical],
+      1,
+    ),
+  );
+  assert.ok(selectedOuter);
+  assert.deepEqual(
+    new Set([selectedOuter.target.id, selectedOuter.secondTarget.id]),
+    new Set([horizontal.id, vertical.id]),
+  );
+  near(selectedOuter.bisectorDirection, {
+    x: Math.SQRT1_2,
+    y: Math.SQRT1_2,
+  });
+});
+
 test("perpendicular construction always ends at the foot and stays a Line", () => {
   const target = makeElement("line", 20, 100, 240, 0);
   const base = assistedLinePreview(

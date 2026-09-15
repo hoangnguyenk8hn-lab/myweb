@@ -32,6 +32,7 @@ import {
 } from "./intersectionPairs";
 import { DEFAULT_PLOT } from "./plotting";
 import { FIXED_ASPECT_SHAPES } from "./shapes";
+import { straightLineTargets } from "./constructionTargets";
 import {
   LINE_TYPES,
   resolveElement,
@@ -678,7 +679,11 @@ export function CurrentDiagramEditor() {
                   setEditId(null);
                 }
                 setTool(next);
-                setSelectedIds([]);
+                const keepBisectorTargets =
+                  next === "angle-bisector" &&
+                  selected.length === 2 &&
+                  straightLineTargets(selected).length === 2;
+                if (!keepBisectorTargets) setSelectedIds([]);
               }}
               onImage={() => imageInput.current?.click()}
               onPlot={newPlot}
