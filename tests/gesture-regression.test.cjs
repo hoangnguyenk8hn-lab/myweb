@@ -20,10 +20,14 @@ const {
   makeElement,
 } = require("../app/diagram/currentDocument.ts");
 const {
+  cancelGestureLifecycle,
+  commitGestureLifecycle,
   gestureModifiers,
   gestureNeedsFinalMove,
   gestureStartsTransaction,
+  moveGestureLifecycle,
   prepareGestureStart,
+  startGestureLifecycle,
   syncGestureModifiers,
 } = require("../app/diagram/gestureLifecycle.ts");
 const {
@@ -79,6 +83,59 @@ test("gesture transaction policy excludes only pan and marquee", () => {
     }),
     true,
   );
+});
+
+test("gesture lifecycle owns one transaction from start through commit", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  const started = startGestureLifecycle(
+    { kind: "endpoint", index: 1, original: line },
+    gestureModifiers({ altKey: false }),
+  );
+  assert.equal(started.beginTransaction, true);
+  assert.equal(started.transactionOpen, true);
+  assert.equal(started.endTransaction, false);
+  assert.equal(started.cancelTransaction, false);
+
+  const moved = moveGestureLifecycle(
+    started,
+    gestureModifiers({ altKey: true }),
+  );
+  assert.equal(moved.transactionOpen, true);
+  assert.equal(moved.disableGridSnap, true);
+  assert.equal(moved.gesture.constrainToAxis, true);
+
+  const committed = commitGestureLifecycle(moved);
+  assert.equal(committed.gesture, null);
+  assert.equal(committed.transactionOpen, false);
+  assert.equal(committed.beginTransaction, false);
+  assert.equal(committed.endTransaction, true);
+  assert.equal(committed.cancelTransaction, false);
+});
+
+test("gesture lifecycle cancel restores an open transaction and ignores view-only gestures", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  const editing = startGestureLifecycle(
+    { kind: "endpoint", index: 1, original: line },
+    gestureModifiers({}),
+  );
+  const cancelled = cancelGestureLifecycle(editing);
+  assert.equal(cancelled.gesture, null);
+  assert.equal(cancelled.transactionOpen, false);
+  assert.equal(cancelled.cancelTransaction, true);
+  assert.equal(cancelled.endTransaction, false);
+
+  const pan = startGestureLifecycle(
+    {
+      kind: "pan",
+      start: { x: 0, y: 0 },
+      scroll: { x: 0, y: 0 },
+    },
+    gestureModifiers({}),
+  );
+  assert.equal(pan.beginTransaction, false);
+  assert.equal(pan.transactionOpen, false);
+  assert.equal(commitGestureLifecycle(pan).endTransaction, false);
+  assert.equal(cancelGestureLifecycle(pan).cancelTransaction, false);
 });
 
 test("Option endpoint constraint latches while ordinary handle grid suppression does not", () => {
