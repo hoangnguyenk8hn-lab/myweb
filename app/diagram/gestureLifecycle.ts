@@ -68,6 +68,28 @@ export type GestureModifiers = {
 
 export type ModifierEvent = Partial<GestureModifiers>;
 
+/**
+ * Framework-neutral lifecycle state. CurrentCanvasCore still owns pointer
+ * capture/render state, while transaction and modifier semantics live here.
+ */
+export type GestureLifecycleState = {
+  gesture: Gesture | null;
+  disableGridSnap: boolean;
+  transactionOpen: boolean;
+};
+
+export type GestureLifecycleTransition = GestureLifecycleState & {
+  beginTransaction: boolean;
+  endTransaction: boolean;
+  cancelTransaction: boolean;
+};
+
+export const IDLE_GESTURE_LIFECYCLE: GestureLifecycleState = {
+  gesture: null,
+  disableGridSnap: false,
+  transactionOpen: false,
+};
+
 export function gestureModifiers(event: ModifierEvent): GestureModifiers {
   return {
     altKey: !!event.altKey,
@@ -128,14 +150,71 @@ export function syncGestureModifiers(
   };
 }
 
+/** Start one gesture and decide transaction/modifier state in one place. */
+export function startGestureLifecycle(
+  gesture: Gesture,
+  modifiers: GestureModifiers,
+): GestureLifecycleTransition {
+  const synced = syncGestureModifiers(gesture, modifiers);
+  const transactionOpen = gestureStartsTransaction(synced.gesture);
+  return {
+    gesture: synced.gesture,
+    disableGridSnap: synced.disableGridSnap,
+    transactionOpen,
+    beginTransaction: transactionOpen,
+    endTransaction: false,
+    cancelTransaction: false,
+  };
+}
+
+/** Update only transient modifier semantics; transaction ownership never changes mid-gesture. */
+export function moveGestureLifecycle(
+  state: GestureLifecycleState,
+  modifiers: GestureModifiers,
+): GestureLifecycleState {
+  if (!state.gesture) return IDLE_GESTURE_LIFECYCLE;
+  const synced = syncGestureModifiers(state.gesture, modifiers);
+  return {
+    gesture: synced.gesture,
+    disableGridSnap: synced.disableGridSnap,
+    transactionOpen: state.transactionOpen,
+  };
+}
+
+/** Finish an active gesture exactly once. View/selection gestures have no history transaction to close. */
+export function commitGestureLifecycle(
+  state: GestureLifecycleState,
+): GestureLifecycleTransition {
+  return {
+    ...IDLE_GESTURE_LIFECYCLE,
+    beginTransaction: false,
+    endTransaction: state.transactionOpen,
+    cancelTransaction: false,
+  };
+}
+
+/** Cancel mirrors commit but restores the transaction snapshot instead of recording it. */
+export function cancelGestureLifecycle(
+  state: GestureLifecycleState,
+): GestureLifecycleTransition {
+  return {
+    ...IDLE_GESTURE_LIFECYCLE,
+    beginTransaction: false,
+    endTransaction: false,
+    cancelTransaction: state.transactionOpen,
+  };
+}
+
+/** Backward-compatible start projection used by CurrentCanvasCore while migration is staged. */
 export function prepareGestureStart(
   gesture: Gesture,
   modifiers: GestureModifiers,
 ): { gesture: Gesture; disableGridSnap: boolean; beginTransaction: boolean } {
-  const synced = syncGestureModifiers(gesture, modifiers);
+  const started = startGestureLifecycle(gesture, modifiers);
   return {
-    ...synced,
-    beginTransaction: gestureStartsTransaction(synced.gesture),
+    gesture: started.gesture!,
+    disableGridSnap: started.disableGridSnap,
+    beginTransaction: started.beginTransaction,
   };
 }
 
