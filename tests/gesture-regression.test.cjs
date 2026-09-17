@@ -20,6 +20,13 @@ const {
   makeElement,
 } = require("../app/diagram/currentDocument.ts");
 const {
+  gestureModifiers,
+  gestureNeedsFinalMove,
+  gestureStartsTransaction,
+  prepareGestureStart,
+  syncGestureModifiers,
+} = require("../app/diagram/gestureLifecycle.ts");
+const {
   tangentLineForPointer,
   tangentRetainsCandidateAt,
 } = require("../app/diagram/tangents.ts");
@@ -46,6 +53,97 @@ test("construction tools can never fall through to drawable element creation", (
       `${tool} must require an explicit construction commit`,
     );
   }
+});
+
+test("gesture transaction policy excludes only pan and marquee", () => {
+  assert.equal(
+    gestureStartsTransaction({
+      kind: "pan",
+      start: { x: 0, y: 0 },
+      scroll: { x: 0, y: 0 },
+    }),
+    false,
+  );
+  assert.equal(
+    gestureStartsTransaction({
+      kind: "marquee",
+      start: { x: 0, y: 0 },
+      add: [],
+    }),
+    false,
+  );
+  assert.equal(
+    gestureStartsTransaction({
+      kind: "point-reflection",
+      start: { x: 0, y: 0 },
+    }),
+    true,
+  );
+});
+
+test("Option endpoint constraint latches while ordinary handle grid suppression does not", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  const endpoint = prepareGestureStart(
+    { kind: "endpoint", index: 1, original: line },
+    gestureModifiers({ altKey: true }),
+  );
+  assert.equal(endpoint.beginTransaction, true);
+  assert.equal(endpoint.gesture.constrainToAxis, true);
+  assert.equal(endpoint.disableGridSnap, true);
+
+  const released = syncGestureModifiers(
+    endpoint.gesture,
+    gestureModifiers({ altKey: false }),
+  );
+  assert.equal(released.gesture.constrainToAxis, true);
+  assert.equal(released.disableGridSnap, true);
+
+  const resize = {
+    kind: "resize",
+    start: { x: 0, y: 0 },
+    handle: "e",
+    box: { x: 0, y: 0, width: 100, height: 50 },
+    local: false,
+    originals: [line],
+  };
+  assert.equal(
+    syncGestureModifiers(resize, gestureModifiers({ altKey: true }))
+      .disableGridSnap,
+    true,
+  );
+  assert.equal(
+    syncGestureModifiers(resize, gestureModifiers({ altKey: false }))
+      .disableGridSnap,
+    false,
+  );
+});
+
+test("final pointer-up move replay policy stays centralized", () => {
+  const line = makeElement("line", 0, 0, 100, 0);
+  assert.equal(
+    gestureNeedsFinalMove(
+      { kind: "draw", id: line.id, start: { x: 0, y: 0 }, points: [], original: line },
+      0,
+      1,
+    ),
+    true,
+  );
+  assert.equal(
+    gestureNeedsFinalMove(
+      { kind: "move", start: { x: 0, y: 0 }, originals: [line] },
+      0.5,
+      1,
+    ),
+    false,
+  );
+  assert.equal(
+    gestureNeedsFinalMove(
+      { kind: "move", start: { x: 0, y: 0 }, originals: [line] },
+      2,
+      1,
+    ),
+    true,
+  );
 });
 
 test("external tangent keeps its branch while pointer extends past contact", () => {
