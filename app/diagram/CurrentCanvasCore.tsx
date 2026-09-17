@@ -49,6 +49,14 @@ import {
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
 import {
+  gestureModifiers,
+  gestureNeedsFinalMove,
+  prepareGestureStart,
+  syncGestureModifiers,
+  type Box,
+  type Gesture,
+} from "./gestureLifecycle";
+import {
   ellipseAngleForPoint,
   ellipseArcPoint,
   FIXED_ASPECT_SHAPES,
@@ -89,59 +97,6 @@ import {
 } from "./types";
 
 type Update = DiagramDocument | ((d: DiagramDocument) => DiagramDocument);
-type Box = { x: number; y: number; width: number; height: number };
-type Gesture =
-  | {
-      kind: "draw" | "freehand";
-      id: string;
-      start: Point;
-      points: Point[];
-      original: DiagramElement;
-    }
-  | { kind: "tangent"; start: Point }
-  | {
-      kind: "perpendicular";
-      start: Point;
-      mode: AssistedLineConstruction;
-      targetIds?: string[];
-    }
-  | { kind: "point-reflection"; start: Point }
-  | {
-      kind: "move";
-      start: Point;
-      originals: DiagramElement[];
-      copySource?: DiagramElement[];
-      copied?: boolean;
-    }
-  | {
-      kind: "resize";
-      start: Point;
-      handle: string;
-      box: Box;
-      local: boolean;
-      originals: DiagramElement[];
-    }
-  | { kind: "rotate"; center: Point; angle: number; original: DiagramElement }
-  | {
-      kind: "control" | "point";
-      index: number;
-      original: DiagramElement;
-    }
-  | {
-      kind: "endpoint";
-      index: number;
-      original: DiagramElement;
-      constrainToAxis?: boolean;
-    }
-  | {
-      kind: "arc-angle";
-      endpoint: "start" | "end";
-      original: DiagramElement;
-    }
-  | { kind: "marquee"; start: Point; add: string[] }
-  | { kind: "connect"; id: string; from: string; start: Point }
-  | { kind: "pan"; start: Point; scroll: Point }
-  | { kind: "canvas-size"; start: Point; width: number; height: number };
 type TangentPreviewState = {
   targetId: string;
   candidates: TangentCandidate[];
@@ -149,16 +104,6 @@ type TangentPreviewState = {
   line: TangentLinePreview | null;
 };
 
-function isSelectionHandleGesture(gesture: Gesture) {
-  return [
-    "resize",
-    "rotate",
-    "endpoint",
-    "control",
-    "point",
-    "arc-angle",
-  ].includes(gesture.kind);
-}
 interface Props {
   document: DiagramDocument;
   tool: DiagramTool;
@@ -548,14 +493,13 @@ export function CurrentCanvas(p: Props) {
   const begin = (event: ReactPointerEvent, g: Gesture) => {
     event.preventDefault();
     event.stopPropagation();
-    if (g.kind === "endpoint" && event.altKey) g.constrainToAxis = true;
-    gesture.current = g;
-    disableGridSnapRef.current =
-      event.altKey && isSelectionHandleGesture(g);
+    const started = prepareGestureStart(g, gestureModifiers(event));
+    gesture.current = started.gesture;
+    disableGridSnapRef.current = started.disableGridSnap;
     gestureTargets.current = snapTargets;
     snappedTarget.current = null;
     setSnapPoint(null);
-    if (g.kind !== "pan" && g.kind !== "marquee") onBegin();
+    if (started.beginTransaction) onBegin();
     capture(event);
   };
   const finishPolygon = () => {
@@ -805,11 +749,15 @@ export function CurrentCanvas(p: Props) {
       setPolyPreview(snap(constrain(raw), [polygon.current.id]));
       return;
     }
-    const g = gesture.current;
-    if (g?.kind === "endpoint" && event.altKey) g.constrainToAxis = true;
-    if (g && isSelectionHandleGesture(g))
-      disableGridSnapRef.current =
-        event.altKey || (g.kind === "endpoint" && !!g.constrainToAxis);
+    let g = gesture.current;
+    if (g) {
+      const synced = syncGestureModifiers(g, gestureModifiers(event));
+      if (synced.gesture !== g) {
+        gesture.current = synced.gesture;
+        g = synced.gesture;
+      }
+      disableGridSnapRef.current = synced.disableGridSnap;
+    }
     if (!g) {
       if (tool !== "select" && tool !== "hand" && !editId)
         snap(constrain(raw), []);
@@ -1082,16 +1030,13 @@ export function CurrentCanvas(p: Props) {
   const up = (event: ReactPointerEvent<SVGSVGElement>) => {
     const g = gesture.current;
     if (!g) return;
-    if (
-      ["draw", "connect", "point", "control", "arc-angle"].includes(
-        g.kind,
-      ) ||
-      (g.kind === "move" &&
-        Math.hypot(pos(event).x - g.start.x, pos(event).y - g.start.y) >
-          1 / zoom)
-    )
-      move(event);
-    const q = constrain(pos(event));
+    const release = pos(event),
+      movement =
+        g.kind === "move"
+          ? Math.hypot(release.x - g.start.x, release.y - g.start.y)
+          : 0;
+    if (gestureNeedsFinalMove(g, movement, zoom)) move(event);
+    const q = constrain(release);
     if (g.kind === "marquee") {
       const b = normalizeBox(g.start, q);
       const dragged = b.width > 1 / zoom || b.height > 1 / zoom;
