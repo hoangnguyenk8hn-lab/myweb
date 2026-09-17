@@ -24,6 +24,7 @@ const {
   moveLineVertex,
   curveControls,
   sceneBounds,
+  localPoint,
   worldPoint,
   markerDimension,
   resolveElement,
@@ -54,7 +55,10 @@ const {
 } = require("../app/diagram/snapping.ts");
 const { svgPathAnchors } = require("../app/diagram/pathBounds.ts");
 const { elementStrokeMetrics } = require("../app/diagram/strokeStyle.ts");
-const { tangentCandidates } = require("../app/diagram/tangents.ts");
+const {
+  tangentCandidates,
+  tangentSourceAt,
+} = require("../app/diagram/tangents.ts");
 const {
   angleIsOnEllipseArc,
   BASIC_SHAPES,
@@ -177,6 +181,114 @@ test("circle and ellipse arcs keep only exact tangents on their visible span", (
     ),
     true,
   );
+});
+
+test("arc and ellipse tangents use the original conic after resize and transform", () => {
+  const assertTangent = (element, source, candidate, geometry) => {
+    const localSource = localPoint(source, element),
+      localContact = localPoint(candidate.contact, element),
+      cx = element.x + (element.width * geometry.cx) / 100,
+      cy = element.y + (element.height * geometry.cy) / 100,
+      axisX = (element.width * geometry.rx) / 100,
+      axisY = (element.height * geometry.ry) / 100,
+      nx = (localContact.x - cx) / axisX,
+      ny = (localContact.y - cy) / axisY,
+      secant = {
+        x: localContact.x - localSource.x,
+        y: localContact.y - localSource.y,
+      },
+      derivative = { x: -axisX * ny, y: axisY * nx };
+    assert.ok(Math.abs(nx * nx + ny * ny - 1) < 1e-7);
+    assert.ok(
+      Math.abs(secant.x * derivative.y - secant.y * derivative.x) < 1e-6,
+    );
+  };
+
+  const arc = {
+    ...makeElement("shape:circle", 0, 0, 200, 100),
+    parameters: { arc: 1, arcStart: 45, arcEnd: 150 },
+  };
+  const arcCandidates = tangentCandidates({ x: 250, y: 90 }, arc);
+  assert.equal(arcCandidates.length, 1);
+  near(arcCandidates[0].contact, { x: 100, y: 90 }, 1e-6);
+  assertTangent(arc, { x: 250, y: 90 }, arcCandidates[0], {
+    cx: 50,
+    cy: 50,
+    rx: 40,
+    ry: 40,
+  });
+
+  const ellipse = makeElement("shape:ellipse", 20, 30, 200, 100);
+  const ellipseSource = { x: 300, y: 115 },
+    ellipseCandidates = tangentCandidates(ellipseSource, ellipse);
+  assert.equal(ellipseCandidates.length, 2);
+  assert.ok(
+    ellipseCandidates.some(
+      ({ contact }) =>
+        Math.hypot(contact.x - 120, contact.y - 115) < 1e-6,
+    ),
+  );
+  for (const candidate of ellipseCandidates)
+    assertTangent(ellipse, ellipseSource, candidate, {
+      cx: 50,
+      cy: 50,
+      rx: 45,
+      ry: 35,
+    });
+
+  const transformedArc = {
+      ...makeElement("shape:ellipse", 40, 20, 180, 120),
+      rotation: 31,
+      skewX: 18,
+      parameters: { arc: 1, arcStart: 180, arcEnd: 260 },
+    },
+    tileContact = ellipseArcPoint("ellipse", 210),
+    transformedSource = worldPoint(
+      {
+        x: transformedArc.x + (transformedArc.width * tileContact.x) / 100,
+        y: transformedArc.y + (transformedArc.height * tileContact.y) / 100,
+      },
+      transformedArc,
+    ),
+    transformedCandidates = tangentCandidates(
+      transformedSource,
+      transformedArc,
+    );
+  assert.equal(transformedCandidates.length, 1);
+  assert.equal(transformedCandidates[0].throughSource, true);
+  near(transformedCandidates[0].contact, transformedSource, 1e-6);
+});
+
+test("starting Tangent on an ellipse or arc projects the click onto its stroke", () => {
+  const ellipse = makeElement("shape:ellipse", 0, 0, 200, 100),
+    angle = (40 * Math.PI) / 180,
+    painted = {
+      x: 100 + 90 * Math.cos(angle),
+      y: 50 + 35 * Math.sin(angle),
+    },
+    source = tangentSourceAt(
+      { x: painted.x + 2, y: painted.y + 1 },
+      [ellipse],
+      1,
+    );
+  assert.ok(source);
+  const local = localPoint(source, ellipse),
+    nx = (local.x - 100) / 90,
+    ny = (local.y - 50) / 35;
+  assert.ok(Math.abs(nx * nx + ny * ny - 1) < 1e-7);
+  const candidates = tangentCandidates(source, ellipse);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].throughSource, true);
+
+  const arc = {
+      ...makeElement("shape:circle", 0, 0, 100, 100),
+      parameters: { arc: 1, arcStart: 45, arcEnd: 150 },
+    },
+    visible = tangentSourceAt({ x: 50, y: 91 }, [arc], 1),
+    hidden = tangentSourceAt({ x: 90, y: 50 }, [arc], 1);
+  assert.ok(visible);
+  near(visible, { x: 50, y: 90 }, 1e-6);
+  assert.equal(hidden, null);
 });
 
 test("Intersection uses the infinite supporting lines of straight Lines", () => {

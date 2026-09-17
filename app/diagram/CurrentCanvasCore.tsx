@@ -58,6 +58,7 @@ import {
   tangentCandidates,
   tangentLineForPointer,
   tangentRetainsCandidateAt,
+  tangentSourceAt,
   tangentTargetAt,
   type TangentCandidate,
   type TangentLinePreview,
@@ -676,7 +677,10 @@ export function CurrentCanvas(p: Props) {
       return;
     }
     if (tool === "tangent") {
-      const start = snap(q, []);
+      const snapped = snap(q, []),
+        start = snappedTarget.current
+          ? snapped
+          : tangentSourceAt(q, elements, zoom) ?? snapped;
       setTangentStart(start);
       setTangentPreview(null);
       tangentPreviewRef.current = null;

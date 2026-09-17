@@ -10,6 +10,8 @@ import { elementContour, elementSegments } from "./intersections";
 import { transformPoint } from "./pathBounds";
 import {
   angleIsOnEllipseArc,
+  ellipseArcAngles,
+  ellipseArcGeometry,
   isEllipseArc,
   normalizeShapeAngle,
 } from "./shapes";
@@ -39,6 +41,41 @@ const SMOOTH_PATH_SHAPES = new Set([
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const cross = (a: Point, b: Point) => a.x * b.y - a.y * b.x;
 const dot = (a: Point, b: Point) => a.x * b.x + a.y * b.y;
+
+type EllipseFrame = {
+  cx: number;
+  cy: number;
+  axisX: number;
+  axisY: number;
+  arc: boolean;
+};
+
+function ellipseFrame(target: DiagramElement): EllipseFrame | null {
+  const shape = elementShapeId(target),
+    shapeEllipse = ["circle", "ellipse"].includes(shape),
+    borderedEllipse =
+      TEXT_TYPES.has(target.type) &&
+      ["circle", "ellipse"].includes(target.textBorder ?? "");
+  if (!shapeEllipse && !borderedEllipse) return null;
+  if (shapeEllipse) {
+    const geometry = ellipseArcGeometry(shape);
+    return {
+      cx: target.x + (target.width * geometry.cx) / 100,
+      cy: target.y + (target.height * geometry.cy) / 100,
+      axisX: (target.width * geometry.rx) / 100,
+      axisY: (target.height * geometry.ry) / 100,
+      arc: isEllipseArc(shape, target.parameters),
+    };
+  }
+  const bounds = sceneBounds(target);
+  return {
+    cx: bounds.x + bounds.width / 2,
+    cy: bounds.y + bounds.height / 2,
+    axisX: bounds.width / 2,
+    axisY: bounds.height / 2,
+    arc: false,
+  };
+}
 
 function normalized(v: Point): Point | null {
   const length = Math.hypot(v.x, v.y);
@@ -137,23 +174,19 @@ function ellipseTangents(
   source: Point,
   target: DiagramElement,
 ): TangentCandidate[] | null {
-  const shape = elementShapeId(target),
-    borderedEllipse =
-      TEXT_TYPES.has(target.type) &&
-      ["circle", "ellipse"].includes(target.textBorder ?? ""),
-    arc = isEllipseArc(shape, target.parameters);
-  if (!["circle", "ellipse"].includes(shape) && !borderedEllipse) return null;
+  const frame = ellipseFrame(target);
+  if (!frame) return null;
 
-  const b = sceneBounds(target),
-    rx = b.width / 2,
-    ry = b.height / 2;
-  if (rx < 1e-8 || ry < 1e-8) return [];
+  // sceneBounds() is correct for a complete ellipse, but an arc's bounds only
+  // enclose its visible span. Reusing those bounds changes the center/radii and
+  // solves tangents against an imaginary ellipse. Shape ellipses must always
+  // use the original 100×100 tile geometry, even after conversion to an arc.
+  const { cx, cy, axisX, axisY, arc } = frame;
+  if (Math.abs(axisX) < 1e-8 || Math.abs(axisY) < 1e-8) return [];
 
-  const cx = b.x + rx,
-    cy = b.y + ry,
-    localSource = localPoint(source, target),
-    px = (localSource.x - cx) / rx,
-    py = (localSource.y - cy) / ry,
+  const localSource = localPoint(source, target),
+    px = (localSource.x - cx) / axisX,
+    py = (localSource.y - cy) / axisY,
     d2 = px * px + py * py,
     epsilon = 1e-9;
 
@@ -164,9 +197,12 @@ function ellipseTangents(
     ny: number,
     throughSource = false,
   ): TangentCandidate => {
-    const localContact = { x: cx + rx * nx, y: cy + ry * ny },
+    const localContact = {
+        x: cx + axisX * nx,
+        y: cy + axisY * ny,
+      },
       contact = worldPoint(localContact, target),
-      localDirection = { x: -rx * ny, y: ry * nx },
+      localDirection = { x: -axisX * ny, y: axisY * nx },
       directionPoint = worldPoint(
         {
           x: localContact.x + localDirection.x,
@@ -461,4 +497,45 @@ export function tangentTargetAt(
     }
   }
   return closest;
+}
+
+/**
+ * When a tangent gesture starts on a circle, ellipse or arc, place its source
+ * exactly on that conic. Ordinary scene snapping only exposes a few anchors;
+ * leaving the raw pointer a fraction inside/outside the stroke changes a
+ * one-branch on-curve tangent into zero or two external tangent branches.
+ */
+export function tangentSourceAt(
+  point: Point,
+  elements: DiagramElement[],
+  zoom = 1,
+): Point | null {
+  const target = tangentTargetAt(point, elements, zoom),
+    frame = target ? ellipseFrame(target) : null;
+  if (!target || !frame) return null;
+  const local = localPoint(point, target),
+    nx = (local.x - frame.cx) / frame.axisX,
+    ny = (local.y - frame.cy) / frame.axisY;
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null;
+  const rawAngle = normalizeShapeAngle(
+      (Math.atan2(ny, nx) * 180) / Math.PI,
+    ),
+    pointAt = (angle: number) => {
+      const radians = (angle * Math.PI) / 180;
+      return worldPoint(
+        {
+          x: frame.cx + frame.axisX * Math.cos(radians),
+          y: frame.cy + frame.axisY * Math.sin(radians),
+        },
+        target,
+      );
+    };
+  if (!frame.arc || angleIsOnEllipseArc(rawAngle, target.parameters, 1e-7))
+    return pointAt(rawAngle);
+
+  const { start, sweep } = ellipseArcAngles(target.parameters),
+    endpoints = [pointAt(start), pointAt(start + sweep)];
+  return endpoints.reduce((closest, candidate) =>
+    distance(point, candidate) < distance(point, closest) ? candidate : closest,
+  );
 }
