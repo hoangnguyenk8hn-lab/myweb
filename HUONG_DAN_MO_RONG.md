@@ -30,6 +30,7 @@ Khi kéo hình, canvas cập nhật tọa độ trong tài liệu. Bộ history 
 | ----------------------------- | -------------------------------------------------- |
 | currentDocument.ts            | Tạo trang trắng, đối tượng và ví dụ                |
 | types.ts                      | Registry duy nhất và kiểu TypeScript của dữ liệu   |
+| documentGraph.ts              | Quan hệ, xóa dây chuyền và dọn reference            |
 | documentMigration.ts          | Nâng schema JSON cũ lên version hiện tại           |
 | imageAssets.ts                | Lưu binary ảnh ở IndexedDB, tạo JSON portable      |
 | shapes.ts                     | Định nghĩa SVG và danh sách hình được hiển thị     |
@@ -230,7 +231,9 @@ Muốn hỗ trợ điểm nối chuyên dụng trên từng hình:
 3. Cho `startConnect` hoặc thao tác kéo endpoint lưu anchor đó.
 4. Giữ cùng quy tắc trong mọi nơi render/export.
 
-Hiện tại xóa một đối tượng sẽ xóa các connector đang nối với đối tượng đó. Sao chép cả hai đầu và đường nối sẽ cấp ID mới và nối đúng các bản sao.
+Quan hệ bắt buộc như `fromId`/`toId` phải được khai báo trong `hardDependencyIds()` của `documentGraph.ts`. Xóa đối tượng luôn đi qua `removeElementsFromDocument()` để xóa dây chuyền mọi phần tử phụ thuộc; không viết lại luật xóa trong component React. Quan hệ tùy chọn như `intersectionWith` được `normalizeDocumentReferences()` lọc ID không còn tồn tại và loại trùng lặp.
+
+Hiện tại xóa một đối tượng sẽ xóa các connector đang nối với đối tượng đó. Sao chép cả hai đầu và đường nối sẽ cấp ID mới và nối đúng các bản sao. Khi thêm Dynamic Geometry, bổ sung dependency mới ở `documentGraph.ts` và test xóa dây chuyền trước khi nối nó vào canvas.
 
 ## 9. Công thức và đồ thị
 
@@ -292,13 +295,15 @@ Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có tr
 ## 12. Quy tắc kiến trúc cho construction và snap
 
 - Mỗi construction là một `DiagramTool` có tên riêng, ví dụ `"perpendicular"` hoặc `"angle-bisector"`. Không dùng biến global hoặc cờ nằm ngoài React để ghi nhớ tool đang chọn.
+- Tool tạo đối tượng phải vượt qua `isDrawableTool()` trước khi gọi `makeElement()`. Construction mới phải được thêm vào `CONSTRUCTION_TOOLS` và có nhánh gesture riêng trong canvas; tool chưa được xử lý sẽ không âm thầm tạo Rectangle.
 - Option/Alt phải đi trực tiếp từ pointer event vào hàm geometry qua tham số `modifiers`; không thêm listener module-global.
 - Mỗi construction có target/preview riêng. `assistedLine.ts` chỉ dispatch theo `kind`; không thêm mode-specific field vào `PerpendicularTarget`.
 - `CurrentCanvasCore.tsx` là chủ sở hữu duy nhất của chuỗi `pointerdown → preview → commit/cancel`. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
 - Mọi thao tác bắt điểm gọi `snapPointToScene()` trong `snapping.ts`. Hàm này quyết định thứ tự ưu tiên grid, khung đối tượng và anchor/intersection. Muốn thêm một loại điểm bắt, mở rộng `SnapTarget` và hàm này thay vì copy thuật toán vào tool mới.
 - Công cụ Perpendicular tạo đúng đoạn từ điểm đầu tới chân vuông góc và lưu góc người dùng chọn trong `endHead`, giống mô hình cũ. Preview dùng góc lớn để dễ chọn; renderer thu về tỷ lệ glyph 4/10 khi vẽ thật. Trường `rightAngle` chỉ còn để đọc tương thích các tài liệu đã được tạo trong giai đoạn refactor trước đó.
-- Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, đặt dependency graph ở module dữ liệu thuần, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
+- Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, mở rộng `documentGraph.ts` bằng dependency thuần dữ liệu và một bước resolve riêng, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
 - Khi thêm element type persisted, thêm đúng một lần vào `ELEMENT_TYPES` trong `types.ts`; validator và `makeElement()` cùng dùng registry này. Palette/catalog chỉ chứa metadata UI, không sở hữu một allowed-type set khác.
+- Import JSON phải đi qua migration, validator và chuẩn hóa reference trong `currentExporters.ts`. Không cho phép `NaN`/`Infinity`, shape chưa đăng ký, parameter không phải số hoặc reference treo lọt vào state editor.
 
 Trước khi thêm tool mới, thêm regression test geometry thuần vào `tests/` và chạy:
 

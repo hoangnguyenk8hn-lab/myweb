@@ -14,6 +14,7 @@ import {
   makeElement,
 } from "./currentDocument";
 import { createId } from "./defaultDocument";
+import { removeElementsFromDocument } from "./documentGraph";
 import {
   createTikz,
   DEFAULT_IMAGE_OPTIONS,
@@ -245,15 +246,7 @@ export function CurrentDiagramEditor() {
         report("Đối tượng đang khóa. Hãy mở khóa trước khi xóa.");
       return;
     }
-    history.commit((doc) => ({
-      ...doc,
-      elements: doc.elements.filter(
-        (e) =>
-          !ids.includes(e.id) &&
-          !ids.includes(e.fromId ?? "") &&
-          !ids.includes(e.toId ?? ""),
-      ),
-    }));
+    history.commit((doc) => removeElementsFromDocument(doc, ids));
     toolbarGesture.current = false;
     setEditId(null);
     setTool("select");

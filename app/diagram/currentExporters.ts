@@ -16,6 +16,11 @@ import { collectIntersections, intersectionAppearance } from "./intersections";
 import { RIGHT_ANGLE_MARKERS } from "./lineMarkers";
 import { migrateDocument } from "./documentMigration";
 import {
+  hasValidDocumentReferences,
+  normalizeDocumentReferences,
+} from "./documentGraph";
+import { SHAPE_MAP } from "./shapes";
+import {
   externalizeDocumentImages,
   portableDocument,
   resolveImageAsset,
@@ -155,13 +160,16 @@ export function validDocument(value: unknown): value is DiagramDocument {
     ![d.grid.visible, d.grid.snap, d.grid.editOnly].every(
       (v) => typeof v === "boolean",
     ) ||
+    [d.grid.major, d.grid.snapShapes].some(
+      (v) => v !== undefined && typeof v !== "boolean",
+    ) ||
     !Array.isArray(d.elements) ||
     d.elements.length > 1500
   )
     return false;
   const ids = new Set<string>();
   let pointCount = 0;
-  return d.elements.every((e: DiagramElement) => {
+  const validElements = d.elements.every((e: DiagramElement) => {
     if (
       !e ||
       typeof e.id !== "string" ||
@@ -194,10 +202,19 @@ export function validDocument(value: unknown): value is DiagramDocument {
       "intersectionMarkerSize",
       "breakSize",
       "breakPosition",
+      "pointSize",
     ] as const) {
       if (e[key] !== undefined && !finite(e[key])) return false;
     }
-    for (const key of ["boxed", "intersection", "blockIntersection"] as const)
+    for (const key of [
+      "boxed",
+      "intersection",
+      "blockIntersection",
+      "intersectionHidden",
+      "locked",
+      "bold",
+      "italic",
+    ] as const)
       if (e[key] !== undefined && typeof e[key] !== "boolean") return false;
     if (
       e.rightAngle !== undefined &&
@@ -224,6 +241,11 @@ export function validDocument(value: unknown): value is DiagramDocument {
     if (
       e.intersectionMarkerSize !== undefined &&
       (e.intersectionMarkerSize < 0.1 || e.intersectionMarkerSize > 2)
+    )
+      return false;
+    if (
+      e.pointSize !== undefined &&
+      (e.pointSize < 0.1 || e.pointSize > 2)
     )
       return false;
     if (
@@ -280,10 +302,28 @@ export function validDocument(value: unknown): value is DiagramDocument {
     ] as const)
       if (e[key] !== undefined && typeof e[key] !== "string") return false;
     if (
-      e.parameters &&
-      Object.values(e.parameters).some((value) => !finite(value))
+      e.type === "shape" &&
+      (typeof e.shape !== "string" ||
+        (e.shape !== "point" && !SHAPE_MAP[e.shape]))
     )
       return false;
+    if (e.parameters !== undefined) {
+      if (
+        !e.parameters ||
+        typeof e.parameters !== "object" ||
+        Array.isArray(e.parameters)
+      )
+        return false;
+      const entries = Object.entries(e.parameters);
+      if (
+        entries.length > 64 ||
+        entries.some(
+          ([key, value]) =>
+            !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(key) || !finite(value),
+        )
+      )
+        return false;
+    }
     if (
       e.text !== undefined &&
       (typeof e.text !== "string" || e.text.length > 20000)
@@ -334,6 +374,7 @@ export function validDocument(value: unknown): value is DiagramDocument {
     }
     return true;
   });
+  return validElements && hasValidDocumentReferences(d);
 }
 
 /** Migrate, externalize large assets, then validate one untrusted document. */
@@ -343,7 +384,36 @@ export async function loadDocument(
   const migrated = migrateDocument(value);
   if (!migrated) return null;
   const externalized = await externalizeDocumentImages(migrated);
-  return validDocument(externalized) ? externalized : null;
+  if (validDocument(externalized)) return externalized;
+  if (
+    !Array.isArray(externalized.elements) ||
+    externalized.elements.some(
+      (element) => {
+        if (!element || typeof element !== "object") return true;
+        const candidate = element as {
+          id?: unknown;
+          fromId?: unknown;
+          toId?: unknown;
+          intersectionWith?: unknown;
+        };
+        return (
+          typeof candidate.id !== "string" ||
+          (candidate.fromId !== undefined &&
+            typeof candidate.fromId !== "string") ||
+          (candidate.toId !== undefined && typeof candidate.toId !== "string") ||
+          (candidate.intersectionWith !== undefined &&
+            (!Array.isArray(candidate.intersectionWith) ||
+              candidate.intersectionWith.length > 1500 ||
+              candidate.intersectionWith.some((id) => typeof id !== "string")))
+        );
+      },
+    )
+  )
+    return null;
+  const normalized = normalizeDocumentReferences(
+    externalized as unknown as DiagramDocument,
+  );
+  return validDocument(normalized) ? normalized : null;
 }
 
 const n = (v: number) => String(+v.toFixed(2));

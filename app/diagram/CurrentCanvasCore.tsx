@@ -23,7 +23,7 @@ import {
   SNAP_LABELS,
   type SnapTarget,
 } from "./snapping";
-import { makeElement } from "./currentDocument";
+import { isDrawableTool, makeElement } from "./currentDocument";
 import { createId } from "./defaultDocument";
 import {
   absolutePoints,
@@ -713,6 +713,10 @@ export function CurrentCanvas(p: Props) {
       begin(event, { kind: "point-reflection", start });
       return;
     }
+    // Every non-drawable tool must finish in an explicit branch above. This
+    // guard prevents a newly-added construction tool from silently creating a
+    // fallback rectangle when its interaction handler has not been wired yet.
+    if (!isDrawableTool(tool)) return;
     if (tool === "polyline" || tool === "polycurve") {
       const point = snap(q, []);
       if (polygon.current) {

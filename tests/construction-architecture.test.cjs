@@ -15,7 +15,11 @@ require.extensions[".ts"] = (module, file) =>
     file,
   );
 
-const { makeElement } = require("../app/diagram/currentDocument.ts");
+const {
+  blankDocument,
+  isDrawableTool,
+  makeElement,
+} = require("../app/diagram/currentDocument.ts");
 const {
   assistedLinePreview,
   assistedLineTargetAt,
@@ -30,7 +34,15 @@ const {
   rightAngleMarkerPath,
 } = require("../app/diagram/lineMarkers.ts");
 const { snapPointToScene } = require("../app/diagram/snapping.ts");
-const { validDocument } = require("../app/diagram/currentExporters.ts");
+const {
+  loadDocument,
+  validDocument,
+} = require("../app/diagram/currentExporters.ts");
+const {
+  hasValidDocumentReferences,
+  normalizeDocumentReferences,
+  removeElementsFromDocument,
+} = require("../app/diagram/documentGraph.ts");
 const { migrateDocument } = require("../app/diagram/documentMigration.ts");
 const { documentsEqual } = require("../app/diagram/currentHistory.ts");
 const { ELEMENT_TYPES, isElementType } = require("../app/diagram/types.ts");
@@ -359,4 +371,85 @@ test("construction modules depend on one shared geometry kernel", () => {
   assert.match(intersections, /geometryKernel/);
   assert.doesNotMatch(perpendicular, /function segmentIntersection/);
   assert.doesNotMatch(bisector, /function segmentIntersection/);
+});
+
+test("only registered drawable tools can create persisted elements", () => {
+  assert.equal(isDrawableTool("line"), true);
+  assert.equal(isDrawableTool("shape:ellipse"), true);
+  assert.equal(isDrawableTool("shape"), false);
+  assert.equal(isDrawableTool("shape:not-registered"), false);
+  assert.equal(isDrawableTool("tangent"), false);
+  assert.equal(isDrawableTool("select"), false);
+  assert.throws(() => makeElement("tangent"), /Cannot create an element/);
+  assert.throws(() => makeElement("shape"), /Cannot create an element/);
+  assert.throws(
+    () => makeElement("shape:not-registered"),
+    /Cannot create an element/,
+  );
+
+  const catalog = fs.readFileSync(
+    require.resolve("../app/diagram/catalog.tsx"),
+    "utf8",
+  );
+  assert.doesNotMatch(catalog, /TOOL_GROUPS|labelForTool/);
+});
+
+test("document graph cascades hard dependencies and prunes soft links", () => {
+  const anchor = makeElement("text", 20, 20),
+    survivor = makeElement("text", 200, 20),
+    connector = {
+      ...makeElement("line", 20, 20, 180, 0),
+      fromId: anchor.id,
+      toId: survivor.id,
+    },
+    dependent = {
+      ...makeElement("line", 20, 60, 180, 0),
+      fromId: connector.id,
+      toId: survivor.id,
+    },
+    markerOwner = {
+      ...makeElement("line", 0, 100, 250, 0),
+      intersection: true,
+      intersectionWith: [anchor.id, survivor.id],
+    },
+    document = {
+      ...blankDocument(),
+      elements: [anchor, survivor, connector, dependent, markerOwner],
+    },
+    next = removeElementsFromDocument(document, [anchor.id]);
+
+  assert.deepEqual(
+    next.elements.map((element) => element.id),
+    [survivor.id, markerOwner.id],
+  );
+  assert.deepEqual(next.elements[1].intersectionWith, [survivor.id]);
+  assert.equal(hasValidDocumentReferences(next), true);
+});
+
+test("imports repair legacy dangling references before strict validation", async () => {
+  const anchor = makeElement("text", 20, 20),
+    line = {
+      ...makeElement("line", 20, 20, 100, 0),
+      fromId: "missing",
+    };
+  // A self-reference and duplicate/missing soft links simulate old corrupted
+  // saves that previously remained in the editor indefinitely.
+  line.toId = line.id;
+  line.intersectionWith = [anchor.id, anchor.id, line.id, "missing"];
+  const document = { ...blankDocument(), elements: [anchor, line] };
+  assert.equal(validDocument(document), false);
+
+  const normalized = normalizeDocumentReferences(document);
+  assert.equal(normalized.elements[1].fromId, undefined);
+  assert.equal(normalized.elements[1].toId, undefined);
+  assert.deepEqual(normalized.elements[1].intersectionWith, [anchor.id]);
+  assert.equal(validDocument(normalized), true);
+
+  const loaded = await loadDocument(document);
+  assert.ok(loaded);
+  assert.equal(hasValidDocumentReferences(loaded), true);
+
+  const malformed = structuredClone(document);
+  malformed.elements[1].intersectionWith = "not-an-array";
+  assert.equal(await loadDocument(malformed), null);
 });

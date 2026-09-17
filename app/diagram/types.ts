@@ -49,10 +49,16 @@ export const CONSTRUCTION_TOOLS = [
   "point-reflection",
 ] as const;
 export type ConstructionTool = (typeof CONSTRUCTION_TOOLS)[number];
+const CONSTRUCTION_TOOL_SET: ReadonlySet<string> = new Set(CONSTRUCTION_TOOLS);
+export function isConstructionTool(value: unknown): value is ConstructionTool {
+  return typeof value === "string" && CONSTRUCTION_TOOL_SET.has(value);
+}
+
+export type ShapeTool = `shape:${string}`;
+export type DrawableTool = Exclude<ElementType, "shape"> | ShapeTool;
 
 export type DiagramTool =
-  | ElementType
-  | `shape:${string}`
+  | DrawableTool
   | "select"
   | "hand"
   | ConstructionTool;

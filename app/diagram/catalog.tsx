@@ -2,72 +2,6 @@
 
 import type { DiagramTool } from "./types";
 
-export type ToolDefinition = {
-  id: DiagramTool;
-  label: string;
-  shortcut?: string;
-};
-
-export type ToolGroup = {
-  id: string;
-  tools: ToolDefinition[];
-};
-
-export const TOOL_GROUPS: ToolGroup[] = [
-  { id: "text", tools: [{ id: "text", label: "Math text", shortcut: "T" }] },
-  {
-    id: "lines",
-    tools: [
-      { id: "line", label: "Straight line", shortcut: "L" },
-      { id: "curve", label: "Curved line" },
-      { id: "tangent", label: "Tangent from point" },
-      { id: "perpendicular", label: "Perpendicular line" },
-      { id: "arrow", label: "Straight arrow", shortcut: "A" },
-      { id: "curved-arrow", label: "Curved arrow" },
-    ],
-  },
-  {
-    id: "round",
-    tools: [
-      { id: "ellipse", label: "Ellipse", shortcut: "O" },
-      { id: "circle", label: "Circle" },
-      { id: "arc", label: "Ellipse arc" },
-    ],
-  },
-  {
-    id: "boxes",
-    tools: [
-      { id: "rectangle", label: "Rectangle", shortcut: "R" },
-      { id: "square", label: "Square" },
-      { id: "triangle", label: "Triangle" },
-      { id: "diamond", label: "Diamond" },
-      { id: "polygon", label: "Regular polygon" },
-    ],
-  },
-  {
-    id: "curves",
-    tools: [
-      { id: "wave", label: "Wave" },
-      { id: "quadratic", label: "Quadratic curve" },
-      { id: "cubic", label: "Cubic curve" },
-      { id: "brace", label: "Brace" },
-    ],
-  },
-  {
-    id: "axis",
-    tools: [{ id: "axis", label: "Cartesian axis", shortcut: "X" }],
-  },
-  {
-    id: "markers",
-    tools: [
-      { id: "arrow-head", label: "Arrow-head shape" },
-      { id: "double-arrow-head", label: "Double arrow-head" },
-      { id: "cross", label: "Cross" },
-      { id: "target", label: "Aim circle" },
-    ],
-  },
-];
-
 export function ToolIcon({
   tool,
   size = 26,
@@ -158,12 +92,5 @@ export function ToolIcon({
         <path d="M3 14l7-7v4h8V7l7 7-7 7v-4h-8v4z" {...shared} />
       )}
     </svg>
-  );
-}
-
-export function labelForTool(tool: DiagramTool): string {
-  return (
-    TOOL_GROUPS.flatMap((group) => group.tools).find((item) => item.id === tool)
-      ?.label ?? "Select"
   );
 }

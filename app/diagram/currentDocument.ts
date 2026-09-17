@@ -7,7 +7,7 @@ import {
   isElementType,
   type DiagramDocument,
   type DiagramElement,
-  type DiagramTool,
+  type DrawableTool,
 } from "./types";
 
 export const CURRENT_STORAGE_KEY = "diagram-draw-current-v3";
@@ -27,34 +27,35 @@ export function blankDocument(): DiagramDocument {
     elements: [],
   };
 }
+
+/** Runtime guard shared by the canvas and element factory. */
+export function isDrawableTool(tool: unknown): tool is DrawableTool {
+  return (
+    typeof tool === "string" &&
+    (tool.startsWith("shape:")
+      ? !!SHAPE_MAP[tool.slice(6)]
+      : tool !== "shape" && isElementType(tool))
+  );
+}
+
 export function makeElement(
-  tool: DiagramTool,
+  tool: DrawableTool,
   x: number,
   y: number,
   width = 100,
   height = 70,
 ): DiagramElement {
-  const shape =
-    tool === "point"
-      ? "point"
-      : tool.startsWith("shape:")
-        ? tool.slice(6)
-        : undefined;
-  const type = shape
-    ? "shape"
-    : tool === "select" ||
-        tool === "hand" ||
-        tool === "tangent" ||
-        tool === "perpendicular" ||
-        tool === "angle-bisector" ||
-        tool === "point-reflection"
-      ? "rectangle"
-      : isElementType(tool)
-        ? tool
-        : "rectangle";
+  if (!isDrawableTool(tool))
+    throw new Error(`Cannot create an element from tool: ${tool}`);
+  const shape = tool.startsWith("shape:") ? tool.slice(6) : undefined;
+  let type: DiagramElement["type"];
+  if (tool === "point") type = "point";
+  else if (shape) type = "shape";
+  else if (isElementType(tool)) type = tool;
+  else throw new Error(`Cannot resolve element type from tool: ${tool}`);
   const text = ["text", "plain-text", "boxed-text"].includes(type);
   const line = ["line", "arrow", "curve", "curved-arrow"].includes(type);
-  const point = shape === "point";
+  const point = type === "point";
   return {
     id: createId(point ? "point" : type),
     type,
@@ -90,9 +91,6 @@ export function makeElement(
       : {}),
     ...(type === "plot"
       ? { plot: structuredClone(DEFAULT_PLOT), width: 320, height: 230 }
-      : {}),
-    ...(shape && shape !== "point" && !SHAPE_MAP[shape]
-      ? { shape: "rectangle" }
       : {}),
     ...(shape === "regular-polygon"
       ? { parameters: { sides: 5 }, height: width }
