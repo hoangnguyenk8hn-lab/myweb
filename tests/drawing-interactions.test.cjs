@@ -56,6 +56,7 @@ const { svgPathAnchors } = require("../app/diagram/pathBounds.ts");
 const { elementStrokeMetrics } = require("../app/diagram/strokeStyle.ts");
 const { tangentCandidates } = require("../app/diagram/tangents.ts");
 const {
+  angleIsOnEllipseArc,
   BASIC_SHAPES,
   ellipseAngleForPoint,
   ellipseArcPoint,
@@ -148,6 +149,34 @@ test("parabola tangent at its vertex is horizontal", () => {
   near(candidates[0].contact, { x: 50, y: 90 });
   near(candidates[0].end, { y: 90 });
   assert.ok(Math.abs(candidates[0].end.x - 50) > 90);
+});
+
+test("circle and ellipse arcs keep only exact tangents on their visible span", () => {
+  const arc = {
+    ...makeElement("shape:circle", 0, 0, 100, 100),
+    parameters: { arc: 1, arcStart: 300, arcEnd: 20 },
+  };
+  const outside = tangentCandidates({ x: 50, y: -50 }, arc);
+  assert.equal(outside.length, 1);
+  const contactAngle = ellipseAngleForPoint("circle", outside[0].contact);
+  assert.ok(contactAngle >= 300 || contactAngle <= 20);
+
+  const widerArc = {
+    ...arc,
+    parameters: { arc: 1, arcStart: 300, arcEnd: 60 },
+  };
+  const visibleContact = tangentCandidates({ x: 90, y: 50 }, widerArc);
+  assert.equal(visibleContact.length, 1);
+  assert.equal(visibleContact[0].throughSource, true);
+  assert.equal(tangentCandidates({ x: 10, y: 50 }, widerArc).length, 0);
+  assert.equal(
+    angleIsOnEllipseArc(
+      359.99999995,
+      { arc: 1, arcStart: 0, arcEnd: 90 },
+      1e-6,
+    ),
+    true,
+  );
 });
 
 test("Intersection uses the infinite supporting lines of straight Lines", () => {

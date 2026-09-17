@@ -8,7 +8,11 @@ import {
 } from "./sceneGeometry";
 import { elementContour, elementSegments } from "./intersections";
 import { transformPoint } from "./pathBounds";
-import { isEllipseArc } from "./shapes";
+import {
+  angleIsOnEllipseArc,
+  isEllipseArc,
+  normalizeShapeAngle,
+} from "./shapes";
 
 export type TangentCandidate = {
   /** Tangency point on the target object. */
@@ -136,9 +140,8 @@ function ellipseTangents(
   const shape = elementShapeId(target),
     borderedEllipse =
       TEXT_TYPES.has(target.type) &&
-      ["circle", "ellipse"].includes(target.textBorder ?? "");
-  // Open circle/ellipse arcs need their actual path, not the full conic.
-  if (isEllipseArc(shape, target.parameters)) return null;
+      ["circle", "ellipse"].includes(target.textBorder ?? ""),
+    arc = isEllipseArc(shape, target.parameters);
   if (!["circle", "ellipse"].includes(shape) && !borderedEllipse) return null;
 
   const b = sceneBounds(target),
@@ -183,18 +186,30 @@ function ellipseTangents(
       throughSource,
     };
   };
+  const onVisibleArc = (nx: number, ny: number) =>
+    !arc ||
+    angleIsOnEllipseArc(
+      normalizeShapeAngle((Math.atan2(ny, nx) * 180) / Math.PI),
+      target.parameters,
+      1e-7,
+    );
 
   if (Math.abs(d2 - 1) <= epsilon) {
     const scale = 1 / Math.sqrt(Math.max(d2, 1e-20));
-    return [make(px * scale, py * scale, true)];
+    const nx = px * scale,
+      ny = py * scale;
+    return onVisibleArc(nx, ny) ? [make(nx, ny, true)] : [];
   }
 
   const a = 1 / d2,
-    h = Math.sqrt(Math.max(0, d2 - 1)) / d2;
-  return [
-    make(a * px - h * py, a * py + h * px),
-    make(a * px + h * py, a * py - h * px),
-  ];
+    h = Math.sqrt(Math.max(0, d2 - 1)) / d2,
+    contacts = [
+      { nx: a * px - h * py, ny: a * py + h * px },
+      { nx: a * px + h * py, ny: a * py - h * px },
+    ];
+  return contacts
+    .filter(({ nx, ny }) => onVisibleArc(nx, ny))
+    .map(({ nx, ny }) => make(nx, ny));
 }
 
 function realQuadraticRoots(a: number, b: number, c: number) {

@@ -79,8 +79,10 @@ export function angleIsOnEllipseArc(
   parameters: Record<string, number> = {},
   tolerance = 0,
 ) {
-  const { start, sweep } = ellipseArcAngles(parameters);
-  return normalizeShapeAngle(angle - start) <= sweep + tolerance;
+  const { start, sweep } = ellipseArcAngles(parameters),
+    relative = normalizeShapeAngle(angle - start),
+    margin = Math.max(0, tolerance);
+  return relative <= sweep + margin || relative >= 360 - margin;
 }
 
 function ellipseArcPath(id: string, parameters: Record<string, number>) {
