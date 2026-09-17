@@ -27,6 +27,7 @@ const {
   worldPoint,
   markerDimension,
   resolveElement,
+  within,
 } = require("../app/diagram/sceneGeometry.ts");
 const {
   elementSegments,
@@ -55,6 +56,13 @@ const { svgPathAnchors } = require("../app/diagram/pathBounds.ts");
 const { elementStrokeMetrics } = require("../app/diagram/strokeStyle.ts");
 const { tangentCandidates } = require("../app/diagram/tangents.ts");
 const {
+  BASIC_SHAPES,
+  ellipseAngleForPoint,
+  ellipseArcPoint,
+  isEllipseArc,
+  shapePath,
+} = require("../app/diagram/shapes.ts");
+const {
   isExtendedLineIntersectionPair,
   toggleExtendedLineIntersectionPair,
 } = require("../app/diagram/intersectionPairs.ts");
@@ -77,6 +85,42 @@ function curvePoints(e) {
   ].map((p) => worldPoint(p, e));
 }
 const offset = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+
+test("Ellipse is available and Circle/Ellipse can become open arcs", () => {
+  assert.ok(BASIC_SHAPES.some((shape) => shape.id === "ellipse"));
+
+  for (const id of ["circle", "ellipse"]) {
+    const parameters = { arc: 1, arcStart: 30, arcEnd: 330 };
+    assert.equal(isEllipseArc(id, parameters), true);
+    assert.match(shapePath(id, parameters), /^M/);
+    assert.match(shapePath(id, parameters), /A/);
+    assert.doesNotMatch(shapePath(id, parameters), /Z$/);
+
+    const point = ellipseArcPoint(id, 123);
+    assert.ok(Math.abs(ellipseAngleForPoint(id, point) - 123) < 1e-7);
+  }
+});
+
+test("Arc hit testing, snapping and intersections ignore the hidden ellipse", () => {
+  const arc = {
+    ...makeElement("shape:circle", 0, 0, 100, 100),
+    intersection: true,
+    parameters: { arc: 1, arcStart: 45, arcEnd: 315 },
+  };
+
+  assert.equal(within({ x: 90, y: 50 }, arc, 3), false);
+  assert.equal(within({ x: 10, y: 50 }, arc, 3), true);
+
+  const snapTargets = objectSnapTargets(arc);
+  assert.ok(
+    snapTargets.filter((target) => target.kind === "endpoint").length >= 2,
+  );
+
+  const hiddenSide = makeElement("line", 80, 50, 20, 0);
+  assert.equal(collectIntersections([arc, hiddenSide]).length, 0);
+  const visibleSide = makeElement("line", 0, 50, 20, 0);
+  assert.equal(collectIntersections([arc, visibleSide]).length, 1);
+});
 
 test("library shapes render with the same visible stroke metrics as Line", () => {
   const line = makeElement("line", 0, 0, 100, 0);

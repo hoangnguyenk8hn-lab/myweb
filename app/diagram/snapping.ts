@@ -15,6 +15,7 @@ import {
   intersectionAppearance,
   type IntersectionMark,
 } from "./intersections";
+import { isEllipseArc } from "./shapes";
 
 export type SnapTarget = {
   point: Point;
@@ -76,8 +77,10 @@ export function objectSnapTargets(e: DiagramElement): SnapTarget[] {
     ];
   }
   const { path, matrix } = elementContour(e);
+  const shape = elementShapeId(e);
   const round =
-    ["circle", "ellipse"].includes(elementShapeId(e)) ||
+    (!isEllipseArc(shape, e.parameters) &&
+      ["circle", "ellipse"].includes(shape)) ||
     ["circle", "ellipse"].includes(e.textBorder ?? "");
   const key = `${matrix.join(",")}:${round}:${path}`;
   let anchors = cache.get(key);

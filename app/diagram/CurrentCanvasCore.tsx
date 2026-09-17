@@ -48,7 +48,12 @@ import {
   worldPoint,
 } from "./sceneGeometry";
 import { normalizeBox } from "./geometry";
-import { FIXED_ASPECT_SHAPES } from "./shapes";
+import {
+  ellipseAngleForPoint,
+  ellipseArcPoint,
+  FIXED_ASPECT_SHAPES,
+  isEllipseArc,
+} from "./shapes";
 import {
   tangentCandidates,
   tangentLineForPointer,
@@ -127,6 +132,11 @@ type Gesture =
       original: DiagramElement;
       constrainToAxis?: boolean;
     }
+  | {
+      kind: "arc-angle";
+      endpoint: "start" | "end";
+      original: DiagramElement;
+    }
   | { kind: "marquee"; start: Point; add: string[] }
   | { kind: "connect"; id: string; from: string; start: Point }
   | { kind: "pan"; start: Point; scroll: Point }
@@ -139,9 +149,14 @@ type TangentPreviewState = {
 };
 
 function isSelectionHandleGesture(gesture: Gesture) {
-  return ["resize", "rotate", "endpoint", "control", "point"].includes(
-    gesture.kind,
-  );
+  return [
+    "resize",
+    "rotate",
+    "endpoint",
+    "control",
+    "point",
+    "arc-angle",
+  ].includes(gesture.kind);
 }
 interface Props {
   document: DiagramDocument;
@@ -277,7 +292,7 @@ export function CurrentCanvas(p: Props) {
   );
   const single = selected.length === 1 ? selected[0] : undefined;
   const box = selected.length ? union(selected) : null;
-  const singleShape = single ? elementShapeId(single) : undefined;
+  const singleShape = single ? elementShapeId(single) : "";
   const regularPolygonSelection =
     single && singleShape === "regular-polygon"
       ? {
@@ -286,9 +301,41 @@ export function CurrentCanvas(p: Props) {
           r: Math.max(Math.abs(single.width), Math.abs(single.height)) * 0.43,
         }
       : null;
+  const ellipseArcSelection =
+    single && isEllipseArc(singleShape, single.parameters)
+      ? {
+          center: {
+            x: single.x + single.width / 2,
+            y: single.y + single.height / 2,
+          },
+          start: (() => {
+            const point = ellipseArcPoint(
+              singleShape,
+              single.parameters?.arcStart ?? 30,
+            );
+            return {
+              x: single.x + (point.x * single.width) / 100,
+              y: single.y + (point.y * single.height) / 100,
+            };
+          })(),
+          end: (() => {
+            const point = ellipseArcPoint(
+              singleShape,
+              single.parameters?.arcEnd ?? 330,
+            );
+            return {
+              x: single.x + (point.x * single.width) / 100,
+              y: single.y + (point.y * single.height) / 100,
+            };
+          })(),
+        }
+      : null;
   const showSelectionCenter =
     !!single &&
-    (singleShape === "circle" || single.textBorder === "circle" || !!single.boxed);
+    (singleShape === "circle" ||
+      single.textBorder === "circle" ||
+      !!single.boxed ||
+      !!ellipseArcSelection);
   const edit = elements.find((e) => e.id === editId);
   /* Construction previews intentionally mirror the active tool. The preview
    * state is also used by pointer handlers, so it cannot be derived in render. */
@@ -985,6 +1032,25 @@ export function CurrentCanvas(p: Props) {
       );
       return;
     }
+    if (g.kind === "arc-angle") {
+      const local = localPoint(q, g.original);
+      const tilePoint = {
+        x: ((local.x - g.original.x) * 100) / (g.original.width || 1),
+        y: ((local.y - g.original.y) * 100) / (g.original.height || 1),
+      };
+      const angle =
+        Math.round(
+          ellipseAngleForPoint(elementShapeId(g.original), tilePoint) * 10,
+        ) / 10;
+      patch(g.original.id, {
+        parameters: {
+          ...g.original.parameters,
+          arc: 1,
+          [g.endpoint === "start" ? "arcStart" : "arcEnd"]: angle,
+        },
+      });
+      return;
+    }
     if (g.kind === "point") {
       patch(
         g.original.id,
@@ -1009,7 +1075,9 @@ export function CurrentCanvas(p: Props) {
     const g = gesture.current;
     if (!g) return;
     if (
-      ["draw", "connect", "point", "control"].includes(g.kind) ||
+      ["draw", "connect", "point", "control", "arc-angle"].includes(
+        g.kind,
+      ) ||
       (g.kind === "move" &&
         Math.hypot(pos(event).x - g.start.x, pos(event).y - g.start.y) >
           1 / zoom)
@@ -1771,6 +1839,49 @@ export function CurrentCanvas(p: Props) {
                             strokeWidth={0.7 / zoom}
                           />
                         </g>
+                      )}
+                      {single && ellipseArcSelection && !single.locked && (
+                        <>
+                          <path
+                            d={`M${ellipseArcSelection.center.x} ${ellipseArcSelection.center.y}L${ellipseArcSelection.start.x} ${ellipseArcSelection.start.y}M${ellipseArcSelection.center.x} ${ellipseArcSelection.center.y}L${ellipseArcSelection.end.x} ${ellipseArcSelection.end.y}`}
+                            fill="none"
+                            stroke="#7fb886"
+                            strokeWidth={0.7 / zoom}
+                            strokeDasharray={`${3 / zoom} ${3 / zoom}`}
+                            pointerEvents="none"
+                          />
+                          {(["start", "end"] as const).map((endpoint) => {
+                            const point = ellipseArcSelection[endpoint];
+                            return (
+                              <circle
+                                key={endpoint}
+                                cx={point.x}
+                                cy={point.y}
+                                r={4 / zoom}
+                                fill={
+                                  endpoint === "start" ? "#69ae77" : "#e9b265"
+                                }
+                                stroke="white"
+                                strokeWidth={0.7 / zoom}
+                                className="control-handle"
+                                style={{ cursor: "crosshair" }}
+                                onPointerDown={(event) =>
+                                  begin(event, {
+                                    kind: "arc-angle",
+                                    endpoint,
+                                    original: single,
+                                  })
+                                }
+                              >
+                                <title>
+                                  {endpoint === "start"
+                                    ? "Kéo điểm đầu cung"
+                                    : "Kéo điểm cuối cung"}
+                                </title>
+                              </circle>
+                            );
+                          })}
+                        </>
                       )}
                       {single &&
                         ["polyline", "polycurve"].includes(single.type) &&

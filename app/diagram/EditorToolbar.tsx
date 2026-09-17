@@ -14,7 +14,13 @@ import {
   supportsExtendedLineIntersection,
 } from "./intersectionPairs";
 import { hasArrowHead } from "./lineMarkers";
-import { isCurve, LINE_TYPES, TEXT_TYPES } from "./sceneGeometry";
+import {
+  elementShapeId,
+  isCurve,
+  LINE_TYPES,
+  TEXT_TYPES,
+} from "./sceneGeometry";
+import { isEllipseArc } from "./shapes";
 import type {
   DiagramDocument,
   DiagramElement,
@@ -94,6 +100,9 @@ export function EditorToolbar({
   const e = selected[0],
     line = e && LINE_TYPES.has(e.type),
     text = e && TEXT_TYPES.has(e.type),
+    shapeId = e ? elementShapeId(e) : "",
+    ellipseArcAvailable = ["circle", "ellipse"].includes(shapeId),
+    ellipseArcActive = !!e && isEllipseArc(shapeId, e.parameters),
     extendedPairAvailable =
       selected.length === 2 && selected.every(supportsExtendedLineIntersection),
     extendedPairActive =
@@ -412,6 +421,66 @@ export function EditorToolbar({
                 value={e.style.dash}
                 onChange={(dash) => onStyle({ dash })}
               />
+            </>
+          )}
+          {ellipseArcAvailable && (
+            <>
+              <Sep />
+              <button
+                className={
+                  ellipseArcActive
+                    ? "toolbar-text-button pressed"
+                    : "toolbar-text-button"
+                }
+                title="Convert Circle/Ellipse to an editable open arc"
+                aria-pressed={ellipseArcActive}
+                onClick={() =>
+                  onPatch({
+                    parameters: {
+                      ...e.parameters,
+                      arc: ellipseArcActive ? 0 : 1,
+                      arcStart: e.parameters?.arcStart ?? 30,
+                      arcEnd: e.parameters?.arcEnd ?? 330,
+                    },
+                  })
+                }
+              >
+                {ellipseArcActive
+                  ? shapeId === "circle"
+                    ? "To Circle"
+                    : "To Ellipse"
+                  : "To Arc"}
+              </button>
+              {ellipseArcActive && (
+                <>
+                  <NumberControl
+                    label="Arc Start"
+                    value={e.parameters?.arcStart ?? 30}
+                    onChange={(arcStart) =>
+                      onPatch({
+                        parameters: { ...e.parameters, arcStart },
+                      })
+                    }
+                    min={0}
+                    max={359}
+                    unit="°"
+                    icon="Start"
+                  />
+                  <NumberControl
+                    label="Arc End"
+                    value={e.parameters?.arcEnd ?? 330}
+                    onChange={(arcEnd) =>
+                      onPatch({
+                        parameters: { ...e.parameters, arcEnd },
+                      })
+                    }
+                    min={0}
+                    max={359}
+                    unit="°"
+                    icon="End"
+                  />
+                </>
+              )}
             </>
           )}
           <Sep />

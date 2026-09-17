@@ -603,6 +603,7 @@ export function CurrentDiagramEditor() {
           a: "arrow",
           r: "shape:rectangle",
           o: "shape:circle",
+          e: "shape:ellipse",
           p: "freehand",
         };
         if (shortcuts[key]) setTool(shortcuts[key]);

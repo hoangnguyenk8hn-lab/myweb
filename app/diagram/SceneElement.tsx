@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ArrowHead, DiagramElement } from "./types";
-import { SHAPE_MAP, shapePath } from "./shapes";
+import { isEllipseArc, SHAPE_MAP, shapePath } from "./shapes";
 import {
   absolutePoints,
   center,
@@ -110,6 +110,7 @@ export function SceneElement({
     c = center(e),
     b = sceneBounds(e),
     shapeId = elementShapeId(e),
+    ellipseArc = isEllipseArc(shapeId, e.parameters),
     strokeMetrics = elementStrokeMetrics(e);
   const id = e.id.replace(/[^a-zA-Z0-9_-]/g, "");
   const paintId = `paint-${id}`;
@@ -420,7 +421,7 @@ export function SceneElement({
         <path
           d={shapePath(shapeId, e.parameters)}
           {...common}
-          fill={definition?.open ? "none" : common.fill}
+          fill={definition?.open || ellipseArc ? "none" : common.fill}
           fillRule="evenodd"
           pointerEvents="none"
         />

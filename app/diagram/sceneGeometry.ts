@@ -11,6 +11,12 @@ import {
   worldBounds as baseWorldBounds,
   worldPoint,
 } from "./sceneGeometryBase";
+import {
+  angleIsOnEllipseArc,
+  ellipseAngleForPoint,
+  ellipseArcGeometry,
+  isEllipseArc,
+} from "./shapes";
 
 export * from "./sceneGeometryBase";
 
@@ -101,6 +107,33 @@ export function drawElement(
 export function within(p: Point, e: DiagramElement, padding = 0) {
   if (isPointElement(e)) return false;
   const shape = e.shape ?? e.type;
+  if (isEllipseArc(shape, e.parameters)) {
+    const geometry = ellipseArcGeometry(shape),
+      tilePoint = {
+        x: ((p.x - e.x) * 100) / (e.width || 1),
+        y: ((p.y - e.y) * 100) / (e.height || 1),
+      },
+      nx = (tilePoint.x - geometry.cx) / geometry.rx,
+      ny = (tilePoint.y - geometry.cy) / geometry.ry,
+      radialDistance = Math.hypot(nx, ny),
+      localRadius = Math.max(
+        1e-8,
+        Math.min(
+          (Math.abs(e.width) * geometry.rx) / 100,
+          (Math.abs(e.height) * geometry.ry) / 100,
+        ),
+      ),
+      angularTolerance =
+        ((padding / localRadius) * 180) / Math.PI + 0.25;
+    return (
+      Math.abs(radialDistance - 1) <= padding / localRadius + 1e-3 &&
+      angleIsOnEllipseArc(
+        ellipseAngleForPoint(shape, tilePoint),
+        e.parameters,
+        angularTolerance,
+      )
+    );
+  }
   const round =
     ROUND_ATTACHMENT_SHAPES.has(shape) ||
     ROUND_ATTACHMENT_SHAPES.has(e.textBorder ?? "");

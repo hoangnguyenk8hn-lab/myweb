@@ -34,6 +34,63 @@ export function regularPolygon(sides: number, radius = 43, star = false) {
   );
 }
 
+export const normalizeShapeAngle = (angle: number) =>
+  ((angle % 360) + 360) % 360;
+
+export function ellipseArcGeometry(id: string) {
+  return id === "ellipse"
+    ? { cx: 50, cy: 50, rx: 45, ry: 35 }
+    : { cx: 50, cy: 50, rx: 40, ry: 40 };
+}
+
+export function isEllipseArc(
+  id: string,
+  parameters: Record<string, number> = {},
+) {
+  return ["circle", "ellipse"].includes(id) && parameters.arc === 1;
+}
+
+export function ellipseArcAngles(parameters: Record<string, number> = {}) {
+  const start = normalizeShapeAngle(parameters.arcStart ?? 30),
+    end = normalizeShapeAngle(parameters.arcEnd ?? 330),
+    sweep = Math.max(0.1, normalizeShapeAngle(end - start));
+  return { start, end, sweep };
+}
+
+export function ellipseArcPoint(id: string, angle: number) {
+  const { cx, cy, rx, ry } = ellipseArcGeometry(id),
+    radians = (normalizeShapeAngle(angle) * Math.PI) / 180;
+  return {
+    x: cx + rx * Math.cos(radians),
+    y: cy + ry * Math.sin(radians),
+  };
+}
+
+export function ellipseAngleForPoint(id: string, point: { x: number; y: number }) {
+  const { cx, cy, rx, ry } = ellipseArcGeometry(id);
+  return normalizeShapeAngle(
+    (Math.atan2((point.y - cy) / ry, (point.x - cx) / rx) * 180) /
+      Math.PI,
+  );
+}
+
+export function angleIsOnEllipseArc(
+  angle: number,
+  parameters: Record<string, number> = {},
+  tolerance = 0,
+) {
+  const { start, sweep } = ellipseArcAngles(parameters);
+  return normalizeShapeAngle(angle - start) <= sweep + tolerance;
+}
+
+function ellipseArcPath(id: string, parameters: Record<string, number>) {
+  const { rx, ry } = ellipseArcGeometry(id),
+    { start, sweep } = ellipseArcAngles(parameters),
+    from = ellipseArcPoint(id, start),
+    to = ellipseArcPoint(id, start + sweep);
+  return `M${from.x} ${from.y}A${rx} ${ry} 0 ${sweep > 180 ? 1 : 0} 1 ${to.x} ${to.y}`;
+}
+
 export const DOCUMENT_SHAPES: ShapeDefinition[] = [
   define("rectangle", "Rectangle", rect),
   define("rounded-rectangle", "Rounded Rectangle", round),
@@ -540,6 +597,7 @@ export const SHAPE_MAP = Object.fromEntries(
 export const BASIC_SHAPES = [
   "rectangle",
   "square",
+  "ellipse",
   "circle",
   "regular-polygon",
 ].map((id) => SHAPE_MAP[id]);
@@ -547,6 +605,7 @@ export const COORDINATE_SHAPES = ["axis", "grid", "quadratic"].map(
   (id) => SHAPE_MAP[id],
 );
 export function shapePath(id: string, parameters: Record<string, number> = {}) {
+  if (isEllipseArc(id, parameters)) return ellipseArcPath(id, parameters);
   if (id === "regular-polygon")
     return regularPolygon(
       Math.max(3, Math.min(100, Math.round(parameters.sides ?? 5))),

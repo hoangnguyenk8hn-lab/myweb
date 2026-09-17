@@ -24,7 +24,7 @@ import {
   type Segment,
   type Bounds,
 } from "./pathBounds";
-import { shapePath } from "./shapes";
+import { isEllipseArc, shapePath } from "./shapes";
 import { isExtendedLineIntersectionPair } from "./intersectionPairs";
 import {
   lineIntersection,
@@ -208,6 +208,9 @@ type Ellipse = {
 };
 function ellipseBoundary(e: DiagramElement): Ellipse | null {
   const id = elementShapeId(e);
+  // An open arc must use its sampled contour. Treating it as an analytic full
+  // ellipse would create intersections on the invisible part of the curve.
+  if (isEllipseArc(id, e.parameters)) return null;
   if (
     !(
       ["circle", "ellipse"].includes(id) ||

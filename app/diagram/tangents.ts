@@ -8,6 +8,7 @@ import {
 } from "./sceneGeometry";
 import { elementContour, elementSegments } from "./intersections";
 import { transformPoint } from "./pathBounds";
+import { isEllipseArc } from "./shapes";
 
 export type TangentCandidate = {
   /** Tangency point on the target object. */
@@ -136,6 +137,8 @@ function ellipseTangents(
     borderedEllipse =
       TEXT_TYPES.has(target.type) &&
       ["circle", "ellipse"].includes(target.textBorder ?? "");
+  // Open circle/ellipse arcs need their actual path, not the full conic.
+  if (isEllipseArc(shape, target.parameters)) return null;
   if (!["circle", "ellipse"].includes(shape) && !borderedEllipse) return null;
 
   const b = sceneBounds(target),

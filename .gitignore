@@ -3,6 +3,7 @@
 
 # Framework and production build output
 /.next/
+/.vinext/
 /dist/
 /out/
 /.wrangler/
