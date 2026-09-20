@@ -1,7 +1,14 @@
 "use client";
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ArrowHead, DiagramElement } from "./types";
-import { isEllipseArc, SHAPE_MAP, shapePath } from "./shapes";
+import {
+  ellipseArcAngles,
+  ellipseArcGeometry,
+  ellipseArcPoint,
+  isEllipseArc,
+  SHAPE_MAP,
+  shapePath,
+} from "./shapes";
 import {
   absolutePoints,
   center,
@@ -70,6 +77,20 @@ export function MarkerGlyph({
     default:
       return null;
   }
+}
+
+function directEllipseArcPath(element: DiagramElement) {
+  const geometry = ellipseArcGeometry("ellipse");
+  const { start, sweep } = ellipseArcAngles(element.parameters);
+  const from = ellipseArcPoint("ellipse", start);
+  const to = ellipseArcPoint("ellipse", start + sweep);
+  const point = (value: { x: number; y: number }) => ({
+    x: element.x + (element.width * value.x) / 100,
+    y: element.y + (element.height * value.y) / 100,
+  });
+  const a = point(from);
+  const b = point(to);
+  return `M${a.x} ${a.y}A${(Math.abs(element.width) * geometry.rx) / 100} ${(Math.abs(element.height) * geometry.ry) / 100} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
 }
 
 export function SceneElement({
@@ -410,6 +431,53 @@ export function SceneElement({
             data-hit-area
           />
         )}
+      </>
+    );
+  } else if (shapeId === "ellipse") {
+    const cx = e.x + e.width / 2,
+      cy = e.y + e.height / 2,
+      rx = Math.abs(e.width) * 0.45,
+      ry = Math.abs(e.height) * 0.35,
+      arcPath = ellipseArc ? directEllipseArcPath(e) : "";
+    content = (
+      <>
+        {ellipseArc ? (
+          <path d={arcPath} {...common} fill="none" pointerEvents="none" />
+        ) : (
+          <ellipse
+            cx={cx}
+            cy={cy}
+            rx={rx}
+            ry={ry}
+            {...common}
+            pointerEvents="none"
+          />
+        )}
+        {interactive &&
+          (ellipseArc ? (
+            <path
+              d={arcPath}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={Math.max(10, s.strokeWidth + 6)}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="stroke"
+              data-hit-area
+            />
+          ) : (
+            <ellipse
+              cx={cx}
+              cy={cy}
+              rx={rx}
+              ry={ry}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={Math.max(10, s.strokeWidth + 6)}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="stroke"
+              data-hit-area
+            />
+          ))}
       </>
     );
   } else {

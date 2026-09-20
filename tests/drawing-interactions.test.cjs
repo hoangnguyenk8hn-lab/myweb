@@ -133,6 +133,24 @@ test("library shapes render with the same visible stroke metrics as Line", () =>
   line.style.dash = "dashed";
   assert.deepEqual(elementStrokeMetrics(line), { width: 2, dash: "6 4" });
 
+  const ellipse = makeElement("shape:ellipse", 0, 0, 100, 100);
+  ellipse.style.strokeWidth = 2;
+  ellipse.style.dash = "dashed";
+  assert.deepEqual(elementStrokeMetrics(ellipse), { width: 2, dash: "6 4" });
+  assert.deepEqual(
+    elementStrokeMetrics({ ...ellipse, width: 300, height: 100 }),
+    { width: 2, dash: "6 4" },
+  );
+  assert.deepEqual(
+    elementStrokeMetrics({
+      ...ellipse,
+      width: 300,
+      height: 100,
+      parameters: { arc: 1, arcStart: 30, arcEnd: 330 },
+    }),
+    { width: 2, dash: "6 4" },
+  );
+
   for (const name of ["square", "rectangle", "regular-polygon", "quadratic"]) {
     const shape = makeElement(`shape:${name}`, 0, 0, 200, 100);
     shape.style.strokeWidth = 2;
