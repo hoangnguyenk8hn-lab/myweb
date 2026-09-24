@@ -13,7 +13,7 @@ import {
   isExtendedLineIntersectionPair,
   supportsExtendedLineIntersection,
 } from "./intersectionPairs";
-import { hasArrowHead } from "./lineMarkers";
+import { hasArrowHead, isRightAngleMarker } from "./lineMarkers";
 import {
   elementShapeId,
   isCurve,
@@ -287,9 +287,18 @@ export function EditorToolbar({
               />
               <MarkerPicker
                 label="Head"
-                value={e.endHead ?? "none"}
+                value={e.rightAngle?.marker ?? e.endHead ?? "none"}
                 size={e.endMarkerSize ?? (e.markerSize ?? 9) / 10}
-                onChange={(endHead) => onPatch({ endHead })}
+                onChange={(endHead) =>
+                  e.rightAngle
+                    ? isRightAngleMarker(endHead)
+                      ? onPatch({
+                          endHead: "none",
+                          rightAngle: { ...e.rightAngle, marker: endHead },
+                        })
+                      : onPatch({ endHead, rightAngle: undefined })
+                    : onPatch({ endHead })
+                }
                 onSizeChange={(endMarkerSize) => onPatch({ endMarkerSize })}
               />
               <Sep />

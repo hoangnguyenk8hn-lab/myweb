@@ -21,7 +21,7 @@ export type TangentCandidate = {
   contact: Point;
   /** End point carrying the tangent direction. */
   end: Point;
-  /** The source itself lies on the target, so the result is a full two-sided line. */
+  /** The source lies on the target, so dragging selects one tangent direction. */
   throughSource?: boolean;
 };
 
@@ -108,28 +108,27 @@ function candidateDirection(
  * Convert a tangent branch into the finite line shown/created by the tool.
  * External tangents always reach the contact point, then can be extended by
  * dragging farther along the tangent. When the source itself is the contact,
- * the line grows symmetrically in both directions around the source.
+ * the line starts there and grows only toward the pointer-selected side.
  */
 export function tangentLineForPointer(
   source: Point,
   candidate: TangentCandidate,
   pointer: Point,
-  minHalfLength = 24,
+  minLength = 24,
 ): TangentLinePreview {
   const unit = candidateDirection(source, candidate);
   if (!unit) return { start: source, end: candidate.end };
 
   const offset = { x: pointer.x - source.x, y: pointer.y - source.y };
   if (candidate.throughSource) {
-    const halfLength = Math.max(minHalfLength, Math.abs(dot(offset, unit)));
+    const projection = dot(offset, unit),
+      side = projection < 0 ? -1 : 1,
+      length = Math.max(minLength, Math.abs(projection));
     return {
-      start: {
-        x: source.x - unit.x * halfLength,
-        y: source.y - unit.y * halfLength,
-      },
+      start: source,
       end: {
-        x: source.x + unit.x * halfLength,
-        y: source.y + unit.y * halfLength,
+        x: source.x + unit.x * side * length,
+        y: source.y + unit.y * side * length,
       },
     };
   }

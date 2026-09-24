@@ -205,18 +205,21 @@ Các thao tác nằm trong `CurrentCanvasCore.tsx`:
 - `elementDown`: chọn/kéo đối tượng.
 - `move`: cập nhật thao tác đang diễn ra.
 - `up`: kết thúc thao tác.
-- `gesture.current`: giữ dữ liệu gốc và loại thao tác.
+- `lifecycle.current`: giữ gesture đang active, trạng thái transaction và luật modifier.
 - `patch()`: cập nhật một phần tử trong lúc kéo.
 - `updateText()`: đổi nhãn và đo lại kích thước công thức.
 
-Một thao tác kéo phải dùng đúng chuỗi:
+Mọi pointer gesture phải đi qua bốn hàm trong `gestureLifecycle.ts`:
 
 ```ts
-onBegin(); // trước khi thay đổi
-onReplace(nextDocument); // mỗi lần pointer di chuyển
-onEnd(); // khi thả chuột
-// hoặc onCancel() khi nhấn Escape
+startGestureLifecycle();
+moveGestureLifecycle();
+commitGestureLifecycle();
+// hoặc cancelGestureLifecycle()
 ```
+
+Lifecycle quyết định đúng một lần gọi `onBegin`/`onEnd`/`onCancel`. Tool chỉ cập
+nhật preview hoặc document, không tự mở/đóng history transaction.
 
 Với một nút bấm thay đổi ngay lập tức, dùng `history.commit()`. Không sửa trực tiếp thuộc tính trong `document.elements`: hãy tạo object/mảng mới để render, history và autosave nhận đúng thay đổi.
 
@@ -295,15 +298,20 @@ Các tài liệu cũ có `intersectionWith` vẫn được đọc: không có tr
 ## 12. Quy tắc kiến trúc cho construction và snap
 
 - Mỗi construction là một `DiagramTool` có tên riêng, ví dụ `"perpendicular"` hoặc `"angle-bisector"`. Không dùng biến global hoặc cờ nằm ngoài React để ghi nhớ tool đang chọn.
-- Tool tạo đối tượng phải vượt qua `isDrawableTool()` trước khi gọi `makeElement()`. Construction mới phải được thêm vào `CONSTRUCTION_TOOLS` và có nhánh gesture riêng trong canvas; tool chưa được xử lý sẽ không âm thầm tạo Rectangle.
+- Tool tạo đối tượng phải vượt qua `isDrawableTool()` trước khi gọi `makeElement()`. Construction mới phải được thêm vào `CONSTRUCTION_TOOLS` và registry trong `constructionGesture.ts`; không thêm nhánh riêng theo tool vào canvas core. Tool chưa được xử lý sẽ không âm thầm tạo Rectangle.
 - Option/Alt phải đi trực tiếp từ pointer event vào hàm geometry qua tham số `modifiers`; không thêm listener module-global.
-- Mỗi construction có target/preview riêng. `assistedLine.ts` chỉ dispatch theo `kind`; không thêm mode-specific field vào `PerpendicularTarget`.
-- `CurrentCanvasCore.tsx` là chủ sở hữu duy nhất của chuỗi `pointerdown → preview → commit/cancel`. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
+- Mỗi construction có session/preview riêng. `constructionGesture.ts` là nơi duy nhất dispatch `start/update/commit`; các module geometry không sở hữu history, selection hoặc React state.
+- `CurrentCanvasCore.tsx` chỉ chuyển pointer event tới gesture active và áp dụng kết quả commit. Không thêm wrapper bắt pointer ở ngoài canvas; nếu không Tangent/Perpendicular sẽ có luật khác Line thường.
 - Mọi thao tác bắt điểm gọi `snapPointToScene()` trong `snapping.ts`. Hàm này quyết định thứ tự ưu tiên grid, khung đối tượng và anchor/intersection. Muốn thêm một loại điểm bắt, mở rộng `SnapTarget` và hàm này thay vì copy thuật toán vào tool mới.
-- Công cụ Perpendicular tạo đúng đoạn từ điểm đầu tới chân vuông góc và lưu góc người dùng chọn trong `endHead`, giống mô hình cũ. Preview dùng góc lớn để dễ chọn; renderer thu về tỷ lệ glyph 4/10 khi vẽ thật. Trường `rightAngle` chỉ còn để đọc tương thích các tài liệu đã được tạo trong giai đoạn refactor trước đó.
+- Công cụ Perpendicular cho phép kéo đầu cuối vượt qua chân vuông góc. Dấu được lưu bằng `rightAngle: { marker, at }`, nên vẫn nằm tại chân thay vì chạy ra endpoint; preview dùng dấu lớn để dễ chọn. Sau khi tạo, chọn Line và dùng **Head → Size** để đổi kích thước dấu từ 0.1–2.
 - Construction hiện tạo hình tĩnh. Nếu xây lại Dynamic Geometry sau này, mở rộng `documentGraph.ts` bằng dependency thuần dữ liệu và một bước resolve riêng, để canvas chỉ phát command; renderer và gesture không được tự sửa object phụ thuộc.
 - Khi thêm element type persisted, thêm đúng một lần vào `ELEMENT_TYPES` trong `types.ts`; validator và `makeElement()` cùng dùng registry này. Palette/catalog chỉ chứa metadata UI, không sở hữu một allowed-type set khác.
 - Import JSON phải đi qua migration, validator và chuẩn hóa reference trong `currentExporters.ts`. Không cho phép `NaN`/`Infinity`, shape chưa đăng ký, parameter không phải số hoặc reference treo lọt vào state editor.
+
+Ranh giới refactor hiện tại: lifecycle/modifier và construction đã được tách; Line/Curve,
+selection, move và resize vẫn ở `CurrentCanvasCore.tsx`. Chỉ tách các phần đó khi có test
+hồi quy tương ứng và một interface dùng chung rõ ràng. Không tạo abstraction chỉ để giảm số
+dòng, vì thay đổi đồng thời hit-test, snap và transform là nhóm rủi ro hồi quy cao nhất.
 
 Trước khi thêm tool mới, thêm regression test geometry thuần vào `tests/` và chạy:
 

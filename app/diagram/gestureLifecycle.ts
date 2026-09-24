@@ -1,8 +1,5 @@
-import type {
-  AssistedLineConstruction,
-  DiagramElement,
-  Point,
-} from "./types";
+import type { ConstructionGestureSession } from "./constructionGesture";
+import type { DiagramElement, Point } from "./types";
 
 export type Box = { x: number; y: number; width: number; height: number };
 
@@ -14,14 +11,7 @@ export type Gesture =
       points: Point[];
       original: DiagramElement;
     }
-  | { kind: "tangent"; start: Point }
-  | {
-      kind: "perpendicular";
-      start: Point;
-      mode: AssistedLineConstruction;
-      targetIds?: string[];
-    }
-  | { kind: "point-reflection"; start: Point }
+  | ConstructionGestureSession
   | {
       kind: "move";
       start: Point;

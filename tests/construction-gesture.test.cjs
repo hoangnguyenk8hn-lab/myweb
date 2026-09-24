@@ -80,7 +80,7 @@ test("angle bisector captures an explicit pair without ambient editor state", ()
   assert.ok(Math.abs(result.element.width - result.element.height) < 1e-7);
 });
 
-test("perpendicular update and commit preserve the exact foot behavior", () => {
+test("perpendicular extends past its foot and stores an adjustable interior mark", () => {
   const axis = makeElement("line", 20, 100, 240, 0);
   const session = startConstructionGesture(
     "perpendicular",
@@ -90,18 +90,33 @@ test("perpendicular update and commit preserve the exact foot behavior", () => {
       snappedPoint: { x: 140, y: 30 },
     }),
   );
-  const updated = updateConstructionGesture(
+  const atFoot = updateConstructionGesture(
     session,
     { x: 140, y: 100 },
     scene([axis]),
   );
-  assert.equal(updated.preview?.kind, "perpendicular");
-  near(updated.preview.start, { x: 140, y: 30 });
-  near(updated.preview.end, { x: 140, y: 100 });
+  assert.equal(atFoot.preview?.kind, "perpendicular");
+  near(atFoot.preview.start, { x: 140, y: 30 });
+  near(atFoot.preview.end, { x: 140, y: 100 });
+
+  const extended = updateConstructionGesture(
+    atFoot,
+    { x: 140, y: 190 },
+    scene([axis]),
+  );
+  near(extended.preview.end, { x: 140, y: 190 });
+
+  const marked = updateConstructionGesture(
+    extended,
+    { x: 150, y: 110 },
+    scene([axis]),
+  );
+  near(marked.preview.end, { x: 140, y: 190 });
+  assert.ok(marked.preview.marker);
 
   const result = commitConstructionGesture(
-    updated,
-    { x: 140, y: 100 },
+    marked,
+    { x: 150, y: 110 },
     scene([axis]),
   );
   assert.ok(result.element);
@@ -113,8 +128,11 @@ test("perpendicular update and commit preserve the exact foot behavior", () => {
       width: result.element.width,
       height: result.element.height,
     },
-    { x: 140, y: 30, width: 0, height: 70 },
+    { x: 140, y: 30, width: 0, height: 160 },
   );
+  assert.equal(result.element.endHead, "none");
+  assert.equal(result.element.rightAngle.marker, marked.preview.marker);
+  assert.ok(Math.abs(result.element.rightAngle.at - 70 / 160) < 1e-7);
 });
 
 test("point reflection materializes only after a valid construction preview", () => {
@@ -155,4 +173,18 @@ test("construction commit never owns history or selection side effects", () => {
     "utf8",
   );
   assert.doesNotMatch(source, /onBegin|onEnd|onCancel|onSelect|onReplace/);
+});
+
+test("CurrentCanvasCore delegates construction geometry to the engine", () => {
+  const source = fs.readFileSync(
+    require.resolve("../app/diagram/CurrentCanvasCore.tsx"),
+    "utf8",
+  );
+  assert.match(source, /startConstructionGesture/);
+  assert.match(source, /updateConstructionGesture/);
+  assert.match(source, /commitConstructionGesture/);
+  assert.doesNotMatch(
+    source,
+    /tangentCandidates|assistedLineTargetAt|pointReflectionTargetAt/,
+  );
 });

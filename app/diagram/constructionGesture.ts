@@ -1,5 +1,4 @@
 import {
-  assistedLineEndHead,
   assistedLineForPointer,
   assistedLineMarkerAt,
   assistedLinePreview,
@@ -244,7 +243,9 @@ const updateAssistedLine: Updater = (session, pointer, scene) => {
     extended?.kind === "perpendicular"
       ? {
           ...extended,
-          marker: assistedLineMarkerAt(pointer, extended, scene.zoom),
+          marker:
+            assistedLineMarkerAt(pointer, extended, scene.zoom) ??
+            (inQuickPick ? null : previous?.marker ?? null),
         }
       : extended;
   return { ...session, preview };
@@ -279,6 +280,25 @@ export function updateConstructionGesture(
   return UPDATERS[session.tool](session, pointer, scene);
 }
 
+/** Rendering projection for a tangent candidate; geometry remains owned here. */
+export function tangentConstructionCandidateLine(
+  session: ConstructionGestureSession,
+  index: number,
+  zoom: number,
+) {
+  if (session.tool !== "tangent") return null;
+  const candidate = session.preview?.candidates[index];
+  if (!candidate) return null;
+  if (index === session.preview?.active && session.preview.line)
+    return session.preview.line;
+  return tangentLineForPointer(
+    session.start,
+    candidate,
+    candidate.end,
+    24 / Math.max(zoom, 1e-6),
+  );
+}
+
 const materializeTangent: Materializer = (session) => {
   if (session.tool !== "tangent" || !session.preview?.line) return null;
   const { start, end } = session.preview.line;
@@ -299,7 +319,17 @@ const materializeAssistedLine: Materializer = (session) => {
     end.x - start.x,
     end.y - start.y,
   );
-  line.endHead = assistedLineEndHead(session.preview);
+  if (session.preview.kind === "perpendicular" && session.preview.marker) {
+    const length = Math.hypot(end.x - start.x, end.y - start.y),
+      footLength = Math.hypot(
+        session.preview.foot.x - start.x,
+        session.preview.foot.y - start.y,
+      );
+    line.rightAngle = {
+      marker: session.preview.marker,
+      at: length > 1e-8 ? Math.min(1, Math.max(0, footLength / length)) : 1,
+    };
+  }
   return line;
 };
 

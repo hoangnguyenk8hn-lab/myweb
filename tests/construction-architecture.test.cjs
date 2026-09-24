@@ -140,15 +140,21 @@ test("selected bisector targets are captured separately from selection handles",
   );
 });
 
-test("perpendicular construction always ends at the foot and stays a Line", () => {
+test("perpendicular construction can extend past its foot and keeps marker selection", () => {
   const target = makeElement("line", 20, 100, 240, 0);
   const base = assistedLinePreview(
     { x: 140, y: 30 },
     assistedLineTargetAt("perpendicular", { x: 140, y: 100 }, [target]),
   );
   assert.ok(base);
-  const fixed = assistedLineForPointer({ x: 140, y: 190 }, base, null);
-  near(fixed.end, fixed.foot);
+  const extended = assistedLineForPointer({ x: 140, y: 190 }, base, null);
+  near(extended.end, { x: 140, y: 190 });
+  const fixed = assistedLineForPointer(
+    { x: 150, y: 110 },
+    base,
+    extended.end,
+  );
+  near(fixed.end, extended.end);
   const decorated = {
     ...fixed,
     marker: "right-angle-outside-right",

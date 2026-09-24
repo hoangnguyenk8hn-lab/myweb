@@ -74,16 +74,38 @@ function previewFrame(preview: PerpendicularPreview) {
 }
 
 export function perpendicularLineForPointer(
-  _pointer: Point,
+  pointer: Point,
   preview: PerpendicularPreview,
-  _previousEnd: Point | null = null,
-  _zoom = 1,
+  previousEnd: Point | null = null,
+  zoom = 1,
 ): PerpendicularPreview {
-  void _previousEnd;
-  void _zoom;
-  // Perpendicular construction always creates the exact segment PH. Pointer
-  // movement around H is reserved exclusively for choosing the corner mark.
-  return { ...preview, end: preview.foot };
+  const frame = previewFrame(preview);
+  if (!frame) return preview;
+  const scale = Math.max(zoom, 1e-6),
+    nearFoot =
+      Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <=
+      30 / scale,
+    previousLength = previousEnd
+      ? (previousEnd.x - preview.start.x) * frame.x.x +
+        (previousEnd.y - preview.start.y) * frame.x.y
+      : frame.length;
+
+  // After extending PH, returning to the quick-pick area around H must keep
+  // that length so the pointer can choose a corner mark independently.
+  if (nearFoot && previousLength > frame.length + 1 / scale)
+    return { ...preview, end: previousEnd! };
+
+  const projectedLength =
+      (pointer.x - preview.start.x) * frame.x.x +
+      (pointer.y - preview.start.y) * frame.x.y,
+    length = Math.max(frame.length, projectedLength);
+  return {
+    ...preview,
+    end: {
+      x: preview.start.x + frame.x.x * length,
+      y: preview.start.y + frame.x.y * length,
+    },
+  };
 }
 
 export function perpendicularRetainsTargetAt(
@@ -91,10 +113,21 @@ export function perpendicularRetainsTargetAt(
   preview: PerpendicularPreview,
   zoom = 1,
 ) {
-  const scale = Math.max(zoom, 1e-6);
+  const scale = Math.max(zoom, 1e-6),
+    frame = previewFrame(preview),
+    vx = pointer.x - preview.start.x,
+    vy = pointer.y - preview.start.y,
+    along = frame ? vx * frame.x.x + vy * frame.x.y : -Infinity,
+    lateral = frame ? Math.abs(vx * frame.y.x + vy * frame.y.y) : Infinity,
+    onExtensionRay =
+      !!frame &&
+      along >= frame.length - 18 / scale &&
+      lateral <= 14 / scale;
   return (
     lineDistance(pointer, preview.target.a, preview.target.b) <= 10 / scale ||
-    Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <= 30 / scale
+    Math.hypot(pointer.x - preview.foot.x, pointer.y - preview.foot.y) <=
+      30 / scale ||
+    onExtensionRay
   );
 }
 

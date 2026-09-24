@@ -138,6 +138,18 @@ test("gesture lifecycle cancel restores an open transaction and ignores view-onl
   assert.equal(cancelGestureLifecycle(pan).cancelTransaction, false);
 });
 
+test("CurrentCanvasCore dispatches through the shared lifecycle state", () => {
+  const source = fs.readFileSync(
+    require.resolve("../app/diagram/CurrentCanvasCore.tsx"),
+    "utf8",
+  );
+  assert.match(source, /startGestureLifecycle/);
+  assert.match(source, /moveGestureLifecycle/);
+  assert.match(source, /commitGestureLifecycle/);
+  assert.match(source, /cancelGestureLifecycle/);
+  assert.doesNotMatch(source, /prepareGestureStart|syncGestureModifiers/);
+});
+
 test("Option endpoint constraint latches while ordinary handle grid suppression does not", () => {
   const line = makeElement("line", 0, 0, 100, 0);
   const endpoint = prepareGestureStart(
@@ -224,7 +236,7 @@ test("external tangent keeps its branch while pointer extends past contact", () 
   near(line.end, { x: 160, y: 0 });
 });
 
-test("on-curve tangent length remains symmetric around its source", () => {
+test("on-curve tangent grows only toward the pointer", () => {
   const source = { x: 50, y: 50 };
   const candidate = {
     contact: source,
@@ -237,8 +249,17 @@ test("on-curve tangent length remains symmetric around its source", () => {
     { x: 90, y: 62 },
     24,
   );
-  near(line.start, { x: 10, y: 50 });
+  near(line.start, source);
   near(line.end, { x: 90, y: 50 });
+
+  const opposite = tangentLineForPointer(
+    source,
+    candidate,
+    { x: 5, y: 48 },
+    24,
+  );
+  near(opposite.start, source);
+  near(opposite.end, { x: 5, y: 50 });
 });
 
 test("point reflection prefers exact snap anchors over a nearby line", () => {
