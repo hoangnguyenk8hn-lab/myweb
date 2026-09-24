@@ -72,7 +72,11 @@ export type ConstructionStart = ConstructionScene & {
 
 export type ConstructionCommit = {
   session: ConstructionGestureSession;
-  element: DiagramElement | null;
+  elements: DiagramElement[];
+};
+
+export type ConstructionCommitModifiers = {
+  shiftKey: boolean;
 };
 
 type Starter = (context: ConstructionStart) => ConstructionGestureSession;
@@ -83,7 +87,9 @@ type Updater = (
 ) => ConstructionGestureSession;
 type Materializer = (
   session: ConstructionGestureSession,
-) => DiagramElement | null;
+  scene: ConstructionScene,
+  modifiers: ConstructionCommitModifiers,
+) => DiagramElement[];
 
 function nearestTangentBranch(pointer: Point, candidates: TangentCandidate[]) {
   let active = -1;
@@ -299,10 +305,25 @@ export function tangentConstructionCandidateLine(
   );
 }
 
-const materializeTangent: Materializer = (session) => {
-  if (session.tool !== "tangent" || !session.preview?.line) return null;
-  const { start, end } = session.preview.line;
-  return makeElement("line", start.x, start.y, end.x - start.x, end.y - start.y);
+const materializeTangent: Materializer = (session, scene, modifiers) => {
+  if (session.tool !== "tangent" || !session.preview?.line) return [];
+  const indexes = modifiers.shiftKey
+    ? session.preview.candidates.map((_, index) => index)
+    : [session.preview.active];
+  return indexes.flatMap((index) => {
+    const preview = tangentConstructionCandidateLine(session, index, scene.zoom);
+    if (!preview) return [];
+    const { start, end } = preview;
+    return [
+      makeElement(
+        "line",
+        start.x,
+        start.y,
+        end.x - start.x,
+        end.y - start.y,
+      ),
+    ];
+  });
 };
 
 const materializeAssistedLine: Materializer = (session) => {
@@ -310,7 +331,7 @@ const materializeAssistedLine: Materializer = (session) => {
     (session.tool !== "perpendicular" && session.tool !== "angle-bisector") ||
     !session.preview
   )
-    return null;
+    return [];
   const { start, end } = session.preview;
   const line = makeElement(
     "line",
@@ -330,18 +351,20 @@ const materializeAssistedLine: Materializer = (session) => {
       at: length > 1e-8 ? Math.min(1, Math.max(0, footLength / length)) : 1,
     };
   }
-  return line;
+  return [line];
 };
 
 const materializePointReflection: Materializer = (session) => {
-  if (session.tool !== "point-reflection" || !session.preview) return null;
-  return makeElement(
-    "point",
-    session.preview.result.x,
-    session.preview.result.y,
-    0,
-    0,
-  );
+  if (session.tool !== "point-reflection" || !session.preview) return [];
+  return [
+    makeElement(
+      "point",
+      session.preview.result.x,
+      session.preview.result.y,
+      0,
+      0,
+    ),
+  ];
 };
 
 const MATERIALIZERS: Record<ConstructionTool, Materializer> = {
@@ -355,7 +378,11 @@ export function commitConstructionGesture(
   session: ConstructionGestureSession,
   pointer: Point,
   scene: ConstructionScene,
+  modifiers: ConstructionCommitModifiers = { shiftKey: false },
 ): ConstructionCommit {
   const next = updateConstructionGesture(session, pointer, scene);
-  return { session: next, element: MATERIALIZERS[next.tool](next) };
+  return {
+    session: next,
+    elements: MATERIALIZERS[next.tool](next, scene, modifiers),
+  };
 }

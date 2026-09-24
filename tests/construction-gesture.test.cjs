@@ -21,6 +21,7 @@ const {
   updateConstructionGesture,
 } = require("../app/diagram/constructionGesture.ts");
 const { makeElement } = require("../app/diagram/currentDocument.ts");
+const { tangentCandidates } = require("../app/diagram/tangents.ts");
 const { CONSTRUCTION_TOOLS } = require("../app/diagram/types.ts");
 
 const near = (actual, expected, tolerance = 1e-7) =>
@@ -73,11 +74,12 @@ test("angle bisector captures an explicit pair without ambient editor state", ()
     { x: 145, y: 145 },
     scene([first, second]),
   );
-  assert.ok(result.element);
-  assert.equal(result.element.type, "line");
-  assert.ok(result.element.width > 0);
-  assert.ok(result.element.height > 0);
-  assert.ok(Math.abs(result.element.width - result.element.height) < 1e-7);
+  assert.equal(result.elements.length, 1);
+  const [element] = result.elements;
+  assert.equal(element.type, "line");
+  assert.ok(element.width > 0);
+  assert.ok(element.height > 0);
+  assert.ok(Math.abs(element.width - element.height) < 1e-7);
 });
 
 test("perpendicular extends past its foot and stores an adjustable interior mark", () => {
@@ -119,20 +121,58 @@ test("perpendicular extends past its foot and stores an adjustable interior mark
     { x: 150, y: 110 },
     scene([axis]),
   );
-  assert.ok(result.element);
-  assert.equal(result.element.type, "line");
+  assert.equal(result.elements.length, 1);
+  const [element] = result.elements;
+  assert.equal(element.type, "line");
   near(
     {
-      x: result.element.x,
-      y: result.element.y,
-      width: result.element.width,
-      height: result.element.height,
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
     },
     { x: 140, y: 30, width: 0, height: 160 },
   );
-  assert.equal(result.element.endHead, "none");
-  assert.equal(result.element.rightAngle.marker, marked.preview.marker);
-  assert.ok(Math.abs(result.element.rightAngle.at - 70 / 160) < 1e-7);
+  assert.equal(element.endHead, "none");
+  assert.equal(element.rightAngle.marker, marked.preview.marker);
+  assert.ok(Math.abs(element.rightAngle.at - 70 / 160) < 1e-7);
+});
+
+test("Shift commits both external tangent branches in one construction result", () => {
+  const circle = makeElement("shape:circle", 0, 0, 100, 100),
+    source = { x: -60, y: 50 },
+    candidates = tangentCandidates(source, circle);
+  assert.equal(candidates.length, 2);
+
+  const session = startConstructionGesture(
+    "tangent",
+    startContext({
+      elements: [circle],
+      rawPoint: source,
+      snappedPoint: source,
+    }),
+  );
+  const pointer = candidates[0].contact;
+  const single = commitConstructionGesture(
+    session,
+    pointer,
+    scene([circle]),
+    { shiftKey: false },
+  );
+  assert.equal(single.elements.length, 1);
+
+  const both = commitConstructionGesture(
+    session,
+    pointer,
+    scene([circle]),
+    { shiftKey: true },
+  );
+  assert.equal(both.elements.length, 2);
+  assert.notEqual(both.elements[0].id, both.elements[1].id);
+  assert.deepEqual(
+    new Set(both.elements.map((line) => `${line.width.toFixed(6)},${line.height.toFixed(6)}`)).size,
+    2,
+  );
 });
 
 test("point reflection materializes only after a valid construction preview", () => {
@@ -155,16 +195,16 @@ test("point reflection materializes only after a valid construction preview", ()
     { x: 200, y: 200 },
     scene([], [target]),
   );
-  assert.equal(empty.element, null);
+  assert.deepEqual(empty.elements, []);
 
   const result = commitConstructionGesture(
     session,
     { x: 50, y: 50 },
     scene([], [target]),
   );
-  assert.ok(result.element);
-  assert.equal(result.element.type, "point");
-  near({ x: result.element.x, y: result.element.y }, { x: 80, y: 90 });
+  assert.equal(result.elements.length, 1);
+  assert.equal(result.elements[0].type, "point");
+  near({ x: result.elements[0].x, y: result.elements[0].y }, { x: 80, y: 90 });
 });
 
 test("construction commit never owns history or selection side effects", () => {

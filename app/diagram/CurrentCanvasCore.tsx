@@ -895,13 +895,13 @@ export function CurrentCanvas(p: Props) {
         elements,
         snapTargets,
         zoom,
-      });
-      if (committed.element) {
+      }, gestureModifiers(event));
+      if (committed.elements.length > 0) {
         p.onReplace((doc) => ({
           ...doc,
-          elements: [...doc.elements, committed.element!],
+          elements: [...doc.elements, ...committed.elements],
         }));
-        p.onSelect([committed.element.id]);
+        p.onSelect(committed.elements.map((element) => element.id));
       } else outcome = "cancel";
       setConstruction(null);
     } else if (g.kind !== "pan") {

@@ -42,6 +42,7 @@ Các gói được khóa phiên bản trong `package-lock.json`. Font toán đư
 13. **Bắt điểm:** khi vẽ mới, kéo đầu mút, chỉnh đỉnh hoặc di chuyển hình, đưa điểm cần nối tới gần đầu mút, trung điểm, đỉnh hoặc tâm của đối tượng khác. Vòng hồng kèm nhãn cho biết điểm đã bắt. Đa giác bắt được từng đỉnh và trung điểm từng cạnh; đường cong dùng điểm giữa trùng vị trí marker Middle mặc định. Các điểm này tự có sẵn, không cần bật Intersection. Khi di chuyển hình, giữ Alt để tạm bỏ bắt điểm.
 14. **Xóa:** bấm chọn nét/hình rồi nhấn Delete hoặc Backspace; cũng có thể bấm nút × đỏ hoặc chuột phải → Delete. Sau khi chỉnh Size hay thuộc tính, bấm lại lên hình để bàn phím trở về vùng vẽ. Với đối tượng đang khóa, mở khóa trước khi xóa. Ctrl/Cmd+Z hoàn tác thao tác xóa.
 15. **Chọn:** kéo vùng chọn chỉ cần chạm một phần của nét/đối tượng là chọn. Với các Shape như Circle, Ellipse, Rectangle và đa giác, thao tác bấm chỉ nhận đường viền; phần bên trong không chọn, kể cả khi hình có Fill.
+16. **Tangent:** kéo bình thường để tạo nhánh tiếp tuyến đang được tô đậm. Khi điểm bắt đầu nằm ngoài đối tượng và có nhiều nhánh hợp lệ, giữ **Shift lúc thả chuột** để tạo tất cả các tiếp tuyến đang hiển thị. Các đường được tạo và hoàn tác cùng một thao tác.
 
 **Lưu để sửa tiếp:** dùng ··· → Save JSON, hoặc Ctrl/Cmd+S. Sau này mở bằng ··· → Open JSON. PNG/SVG là bản xuất hình; JSON là tài liệu để mở lại đầy đủ các đối tượng trong ứng dụng.
 
@@ -93,5 +94,4 @@ Saved nghĩa là sơ đồ đã lưu trong trình duyệt đang dùng. Dữ li�
 | Mô hình JSON                         | app/diagram/types.ts                                |
 | Hiển thị từng đối tượng              | app/diagram/SceneElement.tsx                        |
 | Xuất ảnh / JSON / TikZ               | app/diagram/currentExporters.ts                     |
-
 
