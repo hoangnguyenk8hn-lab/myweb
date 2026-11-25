@@ -39,6 +39,7 @@ import {
   moveLineEndpoint,
   moveLineVertex,
   movePolygonPoint,
+  pointsBox,
   resolveElement,
   resizeElements,
   sceneBounds,
@@ -125,22 +126,6 @@ function union(elements: DiagramElement[]): Box {
     y,
     width: Math.max(1, Math.max(...boxes.map((b) => b.x + b.width)) - x),
     height: Math.max(1, Math.max(...boxes.map((b) => b.y + b.height)) - y),
-  };
-}
-function pointsBox(points: Point[]) {
-  const x = Math.min(...points.map((p) => p.x)),
-    y = Math.min(...points.map((p) => p.y)),
-    width = Math.max(0.01, Math.max(...points.map((p) => p.x)) - x),
-    height = Math.max(0.01, Math.max(...points.map((p) => p.y)) - y);
-  return {
-    x,
-    y,
-    width,
-    height,
-    points: points.map((p) => ({
-      x: (p.x - x) / width,
-      y: (p.y - y) / height,
-    })),
   };
 }
 function optionDragCopies(source: DiagramElement[]) {

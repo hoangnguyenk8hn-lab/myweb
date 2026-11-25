@@ -109,6 +109,22 @@ export function moveLineEndpoint(
   return next;
 }
 
+export function pointsBox(points: Point[]) {
+  const x = Math.min(...points.map((p) => p.x)),
+    y = Math.min(...points.map((p) => p.y)),
+    width = Math.max(0.01, Math.max(...points.map((p) => p.x)) - x),
+    height = Math.max(0.01, Math.max(...points.map((p) => p.y)) - y);
+  return {
+    x,
+    y,
+    width,
+    height,
+    points: points.map((p) => ({
+      x: (p.x - x) / width,
+      y: (p.y - y) / height,
+    })),
+  };
+}
 function fitLineVertices(e: DiagramElement, points: Point[]): DiagramElement {
   const [a, b] = curveControls(e),
     control1 = { x: e.x + a.x, y: e.y + a.y },

@@ -48,6 +48,25 @@ Các gói được khóa phiên bản trong `package-lock.json`. Font toán đư
 
 Saved nghĩa là sơ đồ đã lưu trong trình duyệt đang dùng. Dữ liệu này không tự đồng bộ sang máy khác. Nếu trình duyệt hết dung lượng, nút sẽ báo Save failed; hãy lưu JSON.
 
+### Nhập TikZ để kéo thả
+
+Bấm **Import TikZ** ở thanh dưới. Dán mã, mở tệp `.tex` / `.tikz`, hoặc bấm **Use example** để thử. Khi hình xem trước đúng, bấm **Add to drawing**. Hình được thêm vào giữa bản vẽ hiện tại. Trên điện thoại, nút **Tools** mở bảng công cụ khi cần.
+
+```tex
+\begin{tikzpicture}
+  \coordinate (A) at (0,0);
+  \coordinate (B) at (4,0);
+  \coordinate (C) at (1,2.5);
+  \draw[blue,thick,fill=blue!10] (A) -- (B) -- (C) -- cycle;
+  \node[above] at (C) {$C$};
+\end{tikzpicture}
+```
+
+- Bấm vào cạnh tam giác để chọn, kéo nút vàng để đổi vị trí một đỉnh. Kéo cạnh để di chuyển cả tam giác. Nháy đúp nhãn để sửa nội dung. Muốn di chuyển cả hình lẫn nhãn, chọn tất cả các đối tượng liên quan rồi kéo.
+- Có thể nhập một khối `tikzpicture` hoặc các lệnh rời. Bộ nhập nhận tọa độ Descartes và tọa độ đặt tên, đường gấp khúc, đa giác, đoạn Bézier với `controls`, mũi tên, hình chữ nhật, tròn, elip, nhãn chữ và nhãn toán. Có hỗ trợ một số tùy chọn màu, độ dày, nét đứt và độ mờ.
+- Tên tọa độ được quy đổi thành vị trí lúc nhập. Các nhãn và các đường dựng bằng lệnh riêng có thể chỉnh độc lập. Kéo một đỉnh chưa cập nhật các đối tượng khác cùng tham chiếu tọa độ đó. Các lệnh như `\foreach`, `\input`, `scope` và biểu đồ PGFPlots chưa được hỗ trợ. Hộp nhập báo vị trí lỗi trước khi thêm đối tượng.
+- Ctrl/Cmd+Z ngay sau khi thêm sẽ hoàn tác cả lần nhập. Dùng **Save JSON** để mở lại hình với đầy đủ đỉnh, kiểu nét và nhãn. Mã TikZ xuất ra được dựng từ hình hiện tại, có thể khác cách viết ban đầu.
+
 ## Chức năng đã triển khai
 
 - Shapes gồm hình chữ nhật, hình vuông, hình tròn và đa giác đều tùy số cạnh. Axis, Grid chỉ có axis, grid và y=x². Đã bỏ nhóm Flowchart và Arrow Shapes khỏi bảng công cụ.

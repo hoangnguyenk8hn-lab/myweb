@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CurrentToolPalette } from "./CurrentToolPalette";
 import { CurrentCanvas } from "./CurrentCanvas";
 import { EditorToolbar } from "./EditorToolbar";
@@ -23,6 +23,7 @@ import {
   exportImage,
   latexDocument,
   loadDocument,
+  validDocument,
   type ImageOptions,
 } from "./currentExporters";
 import { storeImageAsset } from "./imageAssets";
@@ -46,6 +47,8 @@ import type {
   ElementStyle,
   PlotSettings,
 } from "./types";
+
+const TikzImportDialog = lazy(() => import("./TikzImportDialog"));
 
 function typing(target: EventTarget | null) {
   return (
@@ -104,9 +107,10 @@ export function CurrentDiagramEditor() {
     [hydrated, setHydrated] = useState(false),
     [saveState, setSaveState] = useState("Saved"),
     [message, setMessage] = useState(""),
+    [toolsOpen, setToolsOpen] = useState(false),
     [closed, setClosed] = useState(false);
   const [dialog, setDialog] = useState<
-      "image" | "tikz" | "size" | "help" | null
+      "image" | "tikz" | "import-tikz" | "size" | "help" | null
     >(null),
     [tikz, setTikz] = useState(""),
     [plot, setPlot] = useState<{ id?: string; settings: PlotSettings } | null>(
@@ -443,6 +447,15 @@ export function CurrentDiagramEditor() {
         setSelectedIds([]);
         setTool("select");
         break;
+      case "import-tikz":
+        if (editId) {
+          history.endGesture();
+          setEditId(null);
+        }
+        setTool("select");
+        setToolsOpen(false);
+        setDialog("import-tikz");
+        break;
       case "import":
         fileInput.current?.click();
         break;
@@ -665,10 +678,11 @@ export function CurrentDiagramEditor() {
         </section>
       ) : (
         <section className="drawing-window" aria-label="Drawing editor">
-          <div className="drawing-workarea">
+          <div className={`drawing-workarea${toolsOpen ? " tools-open" : ""}`}>
             <CurrentToolPalette
               activeTool={tool}
               onSelect={(next) => {
+                setToolsOpen(false);
                 if (editId) {
                   history.endGesture();
                   setEditId(null);
@@ -684,8 +698,14 @@ export function CurrentDiagramEditor() {
                 setTool(next);
                 setSelectedIds([]);
               }}
-              onImage={() => imageInput.current?.click()}
-              onPlot={newPlot}
+              onImage={() => {
+                setToolsOpen(false);
+                imageInput.current?.click();
+              }}
+              onPlot={(kind) => {
+                setToolsOpen(false);
+                newPlot(kind);
+              }}
             />
             <div className="drawing-main" ref={drawingMainRef}>
               <EditorToolbar
@@ -852,6 +872,15 @@ export function CurrentDiagramEditor() {
           </div>
           <footer className="drawing-footer">
             <button
+              className="mobile-tools"
+              aria-expanded={toolsOpen}
+              aria-controls="drawing-tools"
+              onClick={() => setToolsOpen(!toolsOpen)}
+            >
+              Tools
+            </button>
+            <button onClick={() => run("import-tikz")}>Import TikZ</button>
+            <button
               onClick={() => {
                 if (editId) {
                   history.endGesture();
@@ -957,6 +986,26 @@ export function CurrentDiagramEditor() {
             setTool("select");
           }}
         />
+      )}
+      {dialog === "import-tikz" && (
+        <Suspense fallback={<div className="editor-notice" role="status">Opening TikZ importer…</div>}>
+          <TikzImportDialog
+            drawing={d}
+            onClose={() => setDialog(null)}
+            onInsert={(next, ids) => {
+              if (!validDocument(next))
+                throw new Error("This import exceeds the drawing limits. Try a smaller picture.");
+              history.commit(next);
+              setSelectedIds(ids);
+              setAngleBisectorTargetIds([]);
+              setEditId(null);
+              setTool("select");
+              setDialog(null);
+              report("TikZ added · Select an object to drag or edit it.");
+              requestAnimationFrame(() => svgRef.current?.focus());
+            }}
+          />
+        </Suspense>
       )}
       {dialog === "tikz" && (
         <div className="modal-shade">

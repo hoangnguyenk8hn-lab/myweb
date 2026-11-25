@@ -119,7 +119,7 @@ export function CurrentToolPalette({
     );
   };
   return (
-    <aside className="shape-sidebar" aria-label="Drawing tools">
+    <aside id="drawing-tools" className="shape-sidebar" aria-label="Drawing tools">
       {header("general", "General")}
       {open.general && (
         <div className="general-tools">
